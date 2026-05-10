@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -8,7 +8,41 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { loginUser, clearError } from "@/store/slices/authSlice";
 import { pushToast } from "@/store/slices/uiSlice";
 
+/**
+ * Outer page — pure shell + Suspense boundary.
+ * Anything that calls useSearchParams() must live INSIDE the boundary,
+ * otherwise Next.js bails out of static rendering for the whole route.
+ */
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginShell />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+/** Skeleton shown while the search-params-using form hydrates */
+function LoginShell() {
+  return (
+    <section className="min-h-[80vh] grid place-items-center container-px py-20">
+      <div className="w-full max-w-md border border-rule bg-bone p-10">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 rounded bg-rule animate-pulse" />
+          <div className="h-7 w-24 rounded bg-rule animate-pulse" />
+        </div>
+        <div className="h-9 w-44 rounded bg-rule animate-pulse mt-6 mb-2" />
+        <div className="h-4 w-56 rounded bg-rule animate-pulse mb-10" />
+        <div className="space-y-6">
+          <div className="h-12 w-full rounded bg-rule animate-pulse" />
+          <div className="h-12 w-full rounded bg-rule animate-pulse" />
+          <div className="h-11 w-full rounded bg-rule animate-pulse" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const dispatch = useAppDispatch();
@@ -61,7 +95,7 @@ export default function LoginPage() {
             style={{ height: "auto" }}
           />
           <span className="font-display text-3xl tracking-tightest">
-            ae<span className=" font-light">Tech</span>
+            ae<span className="italic font-light">Tech</span>
           </span>
         </Link>
         <h1 className="h-display text-4xl mb-2 mt-6">Admin sign in</h1>
