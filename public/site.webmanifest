@@ -1,0 +1,12 @@
+{
+  "name": "aeTech Digital Hub",
+  "short_name": "aeTech",
+  "description": "Bespoke engineering for ambitious businesses.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF8F5",
+  "theme_color": "#2D0D50",
+  "icons": [
+    { "src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
