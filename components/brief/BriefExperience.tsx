@@ -1,124 +1,107 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Reveal } from "@/components/motion/Reveal";
-import { BriefGate, type GateContact } from "./BriefGate";
 import { BriefEditor } from "./BriefEditor";
 import { getOrCreateFingerprint } from "@/lib/fingerprint";
-import type { StructuredBrief } from "@/lib/brief";
+import { EMPTY_BRIEF, type StructuredBrief } from "@/lib/brief";
 import { Loader2 } from "lucide-react";
+
+type AuthedUser = { name: string; email: string };
 
 type State =
   | { step: "loading" }
-  | { step: "gate"; resumeContact?: Partial<GateContact> }
-  | {
-      step: "editor";
-      briefId: string;
-      contact: GateContact;
-      initial: StructuredBrief;
-    };
+  | { step: "starting" }
+  | { step: "editor"; briefId: string; initial: StructuredBrief };
 
-export function BriefExperience() {
+/**
+ * Brief experience — for AUTHENTICATED users only.
+ * The page-level component (`app/brief/page.tsx`) enforces auth before rendering.
+ *
+ * On mount:
+ *   1. Check for an existing draft tied to this user (via fingerprint AND backed by
+ *      their email on the server)
+ *   2. If found → resume into the editor
+ *   3. If not → create a fresh draft using the user's account info, drop into the editor
+ */
+export function BriefExperience({ authedUser }: { authedUser: AuthedUser }) {
   const [state, setState] = useState<State>({ step: "loading" });
   const [fingerprint, setFingerprint] = useState<string>("");
 
-  // ── On mount: get fingerprint, ping anonymous visit, look for resumable draft ──
   useEffect(() => {
     const fp = getOrCreateFingerprint();
     setFingerprint(fp);
 
-    // Fire-and-forget anonymous visit ping
+    // Anonymous visit ping is now redundant since we know who the user is,
+    // but the editor-page ping is still useful for funnel metrics
     fetch("/api/briefs/visit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fingerprint: fp, page: "gate" }),
+      body: JSON.stringify({ fingerprint: fp, page: "editor" }),
     }).catch(() => {});
 
-    // Look for a resumable draft tied to this fingerprint
+    // Look for a resumable draft
     fetch(`/api/briefs/draft?fingerprint=${encodeURIComponent(fp)}`)
       .then((r) => r.json())
-      .then((json) => {
+      .then(async (json) => {
         if (json.ok && json.brief) {
-          // Found a draft — resume into the editor directly
           setState({
             step: "editor",
             briefId: json.brief.briefId,
-            contact: {
-              name: json.brief.name,
-              email: json.brief.email,
-              company: json.brief.company || "",
-              phone: json.brief.phone || "",
-            },
-            initial: json.brief.structured,
+            initial: json.brief.structured || EMPTY_BRIEF,
+          });
+          return;
+        }
+
+        // No draft — create one with the user's account info
+        setState({ step: "starting" });
+        const createRes = await fetch("/api/briefs/draft", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fingerprint: fp,
+            contact: { name: authedUser.name, email: authedUser.email },
+            source: "brief-editor",
+          }),
+        });
+        const created = await createRes.json();
+        if (created.ok) {
+          setState({
+            step: "editor",
+            briefId: created.briefId,
+            initial: EMPTY_BRIEF,
           });
         } else {
-          // No prior draft — show the gate
-          setState({ step: "gate" });
+          // Fallback to a soft error — show the loading state so the user can retry by reload
+          console.error("[brief] could not create draft", created);
+          setState({ step: "loading" });
         }
       })
-      .catch(() => setState({ step: "gate" }));
+      .catch((err) => {
+        console.error("[brief]", err);
+        setState({ step: "loading" });
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Gate submission: create a draft, transition to editor ──
-  async function handleGatePass(contact: GateContact) {
-    const res = await fetch("/api/briefs/draft", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fingerprint,
-        contact,
-        source: "brief-editor",
-      }),
-    });
-    const json = await res.json();
-    if (!json.ok) {
-      throw new Error(json.error || "Could not start the brief.");
-    }
-
-    // Track that they passed the gate
-    fetch("/api/briefs/visit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fingerprint, page: "editor" }),
-    }).catch(() => {});
-
-    setState({
-      step: "editor",
-      briefId: json.briefId,
-      contact,
-      initial: {
-        aboutYou: "",
-        problem: "",
-        success: "",
-        tried: "",
-        constraints: "",
-        risks: "",
-        anythingElse: "",
-      },
-    });
-  }
-
-  if (state.step === "loading") {
+  if (state.step === "loading" || state.step === "starting") {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
         <Loader2 className="w-5 h-5 animate-spin text-ink-3" strokeWidth={2} />
+        <p className="text-[12.5px] text-ink-3">
+          {state.step === "starting" ? "Setting up your brief…" : "Loading…"}
+        </p>
       </div>
     );
   }
 
-  if (state.step === "gate") {
-    return (
-      <Reveal>
-        <BriefGate onPass={handleGatePass} initial={state.resumeContact} />
-      </Reveal>
-    );
-  }
-
   return (
-    <BriefEditor
-      briefId={state.briefId}
-      fingerprint={fingerprint}
-      initial={state.initial}
-      contactName={state.contact.name}
-    />
+    <Reveal>
+      <BriefEditor
+        briefId={state.briefId}
+        fingerprint={fingerprint}
+        initial={state.initial}
+        contactName={authedUser.name}
+      />
+    </Reveal>
   );
 }

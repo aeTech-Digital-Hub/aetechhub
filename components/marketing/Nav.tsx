@@ -58,7 +58,7 @@ export function Nav() {
 
         <div className="hidden lg:flex items-center gap-2">
           <Link
-            href="/login"
+            href="/sign-in"
             className="text-[14px] text-ink-2 hover:text-ink transition-colors px-3 py-1.5"
           >
             Sign in
@@ -95,7 +95,7 @@ export function Nav() {
             ))}
             <div className="flex gap-2 pt-3 border-t border-rule mt-1">
               <Link
-                href="/login"
+                href="/sign-in"
                 onClick={() => setOpen(false)}
                 className="btn-ghost flex-1 justify-center !py-2 !text-[13px]"
               >

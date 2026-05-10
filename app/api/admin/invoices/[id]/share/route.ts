@@ -4,6 +4,7 @@ import { Invoice } from "@/models/Invoice";
 import { requireAdmin } from "@/lib/auth-server";
 import { sendEmail } from "@/lib/notify";
 import { randomBytes } from "crypto";
+import { recordAdminAction } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,15 @@ export async function POST(
       // Don't fail the share — link still works even if email failed
     }
   }
+
+  // Audit
+  await recordAdminAction({
+    user: { id: user.id, email: user.email },
+    action: "invoice.share",
+    entity: { type: "invoice", id: String(inv._id), label: inv.invoiceNo },
+    req,
+    metadata: { sentTo: sendTo || null, expireDays },
+  });
 
   return NextResponse.json({
     ok: true,

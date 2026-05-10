@@ -1,7 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft, BookOpen } from "lucide-react";
 import { Reveal } from "@/components/motion/Reveal";
 import { BriefExperience } from "@/components/brief/BriefExperience";
+import { getCurrentUser } from "@/lib/auth-server";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Write your brief",
@@ -9,7 +13,14 @@ export const metadata = {
     "A guided editor for writing a project brief — seven sections, contextual tips, autosaved as you go.",
 };
 
-export default function BriefPage() {
+export default async function BriefPage() {
+  // Auth gate — brief is the one form that requires an account.
+  // Anonymous visitors get sent to sign-in with /brief as the next URL.
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/sign-in?next=" + encodeURIComponent("/brief"));
+  }
+
   return (
     <>
       {/* Header */}
@@ -25,8 +36,9 @@ export default function BriefPage() {
             </Link>
             <p className="eyebrow mb-5">Write your brief</p>
             <h1 className="h-display text-[40px] sm:text-[52px] lg:text-[60px] tracking-tightest mb-5 leading-[1.02]">
-              Tell us about{" "}
-              <span className="font-light gradient-text">
+              Hi {user.name?.split(" ")[0] || "there"} — let&apos;s tell us
+              about{" "}
+              <span className="italic font-light gradient-text">
                 your project.
               </span>
             </h1>
@@ -45,9 +57,14 @@ export default function BriefPage() {
         </div>
       </section>
 
-      {/* Experience */}
+      {/* Experience — receives authenticated user, skips contact gate */}
       <section className="container-px pb-32 lg:pb-40 bg-base">
-        <BriefExperience />
+        <BriefExperience
+          authedUser={{
+            name: user.name,
+            email: user.email,
+          }}
+        />
       </section>
     </>
   );
