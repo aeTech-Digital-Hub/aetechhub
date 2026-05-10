@@ -48,6 +48,9 @@ export default async function PortalPage() {
 
   const { briefs, invoices } = await getData(user.email);
 
+  // Guaranteed-string display name for places that don't accept undefined
+  const displayName = user.name?.trim() || user.email.split("@")[0] || "there";
+
   const submittedBriefs = briefs.filter((b) => b.status === "submitted");
   const draftBriefs = briefs.filter((b) => b.status === "draft");
   const paidInvoices = invoices.filter((i) => i.status === "paid");
@@ -67,7 +70,7 @@ export default async function PortalPage() {
             </Link>
             <p className="eyebrow mb-5">Your portal</p>
             <h1 className="h-display text-[40px] sm:text-[48px] lg:text-[56px] tracking-tightest mb-3 leading-[1.02]">
-              Hi, {user.name?.split(" ")[0] || "there"}.
+              Hi, {displayName.split(" ")[0]}.
             </h1>
             <p className="text-[15px] lg:text-[16px] text-ink-2 leading-relaxed max-w-xl">
               Everything we&apos;ve worked on together — your briefs, invoices,
@@ -163,7 +166,7 @@ export default async function PortalPage() {
           <div className="rounded-2xl border border-rule bg-white p-6 lg:p-8">
             <p className="eyebrow mb-3">Account</p>
             <div className="grid sm:grid-cols-2 gap-4 mb-6">
-              <Field label="Name" value={user.name} />
+              <Field label="Name" value={displayName} />
               <Field label="Email" value={user.email} />
             </div>
             <form action="/api/auth/logout" method="POST">

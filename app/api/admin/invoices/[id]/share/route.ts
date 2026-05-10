@@ -73,7 +73,7 @@ export async function POST(
 
   // Audit
   await recordAdminAction({
-    user: { id: user.id, email: user.email },
+    user: { id: user.sub, email: user.email },
     action: "invoice.share",
     entity: { type: "invoice", id: String(inv._id), label: inv.invoiceNo },
     req,

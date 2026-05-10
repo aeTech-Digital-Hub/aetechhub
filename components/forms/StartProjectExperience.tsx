@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { StartProjectForm } from "./StartProjectForm";
 import { BriefSummary, type BriefSummaryData } from "./BriefSummary";
@@ -45,7 +45,9 @@ export function StartProjectExperience() {
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="min-w-0"
         >
-          <StartProjectForm onStateChange={setState} />
+          <Suspense fallback={<FormSkeleton />}>
+            <StartProjectForm onStateChange={setState} />
+          </Suspense>
         </motion.div>
 
         {/* SUMMARY — desktop sticky right rail */}
@@ -168,5 +170,28 @@ function MobileSummary({ data }: { data: BriefSummaryData }) {
         </AnimatePresence>
       </motion.div>
     </>
+  );
+}
+
+/**
+ * Skeleton shown while StartProjectForm hydrates.
+ * The form uses useSearchParams() (for service prefill via ?service=...),
+ * which requires it to live inside a Suspense boundary.
+ */
+function FormSkeleton() {
+  return (
+    <div className="rounded-3xl border border-rule bg-white p-6 sm:p-8 lg:p-10">
+      <div className="space-y-5">
+        <div className="h-3 w-20 rounded bg-rule animate-pulse" />
+        <div className="h-8 w-3/4 rounded bg-rule animate-pulse" />
+        <div className="h-4 w-2/3 rounded bg-rule animate-pulse" />
+        <div className="grid sm:grid-cols-2 gap-3 pt-4">
+          <div className="h-14 rounded-xl bg-rule animate-pulse" />
+          <div className="h-14 rounded-xl bg-rule animate-pulse" />
+          <div className="h-14 rounded-xl bg-rule animate-pulse" />
+          <div className="h-14 rounded-xl bg-rule animate-pulse" />
+        </div>
+      </div>
+    </div>
   );
 }

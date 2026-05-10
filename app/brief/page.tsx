@@ -21,6 +21,10 @@ export default async function BriefPage() {
     redirect("/sign-in?next=" + encodeURIComponent("/brief"));
   }
 
+  // Derive a guaranteed-string display name. JWT payload allows `name` to be
+  // optional, but downstream components want a real string.
+  const displayName = user.name?.trim() || user.email.split("@")[0] || "there";
+
   return (
     <>
       {/* Header */}
@@ -36,8 +40,7 @@ export default async function BriefPage() {
             </Link>
             <p className="eyebrow mb-5">Write your brief</p>
             <h1 className="h-display text-[40px] sm:text-[52px] lg:text-[60px] tracking-tightest mb-5 leading-[1.02]">
-              Hi {user.name?.split(" ")[0] || "there"} — let&apos;s tell us
-              about{" "}
+              Hi {displayName.split(" ")[0]} — let&apos;s tell us about{" "}
               <span className="italic font-light gradient-text">
                 your project.
               </span>
@@ -61,7 +64,7 @@ export default async function BriefPage() {
       <section className="container-px pb-32 lg:pb-40 bg-base">
         <BriefExperience
           authedUser={{
-            name: user.name,
+            name: displayName,
             email: user.email,
           }}
         />
