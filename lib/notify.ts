@@ -41,7 +41,7 @@ export async function sendEmail(payload: EmailPayload) {
 
 // ── BRANDED HTML WRAPPER ───────────────────────────
 export function emailLayout({ heading, body, cta }: { heading: string; body: string; cta?: { label: string; href: string } }) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || 'https://aetechdigitalhub.com';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || 'https://aetechorg.com';
   const logoUrl = `${baseUrl}/aetech-logo-light.png`;
 
   return `
