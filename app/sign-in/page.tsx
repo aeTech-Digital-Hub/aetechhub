@@ -144,7 +144,7 @@ function SignInExperience() {
             style={{ height: "auto" }}
           />
           <span className="h-display text-[18px] tracking-tight">
-            ae<span className="italic font-light">Tech</span>
+            ae<span className="font-light">Tech</span>
           </span>
         </Link>
 
