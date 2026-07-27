@@ -206,35 +206,71 @@ export function WebSiteJsonLd() {
 }
 
 // ─── Optional: Service-level JSON-LD ──────────────────
+// ─── PATCH FOR components/seo/JsonLd.tsx ─────────────────────────────
+//
+// Find the `ServiceJsonLd` function and replace it with the version below.
+// It now accepts EITHER the flat form (name/description/slug/startingFromUsd)
+// or the nested form (service={{...}}), so all existing callers keep working
+// and the nested API remains available for new code.
+//
+// This is the only change needed. The rest of JsonLd.tsx stays as I sent it.
+
+// ─── Optional: Service-level JSON-LD ──────────────────
 /**
  * Drop this into each of your six /services/[slug]/page.tsx routes to
- * make each service its own indexable entity. Example usage in a service page:
+ * make each service its own indexable entity.
  *
- *   import { ServiceJsonLd } from '@/components/seo/JsonLd';
- *   // ...
- *   return (
- *     <>
- *       <ServiceJsonLd service={{ name: 'Penetration Testing', ... }} />
- *       ...
- *     </>
- *   );
+ * Both signatures are accepted for backward compatibility:
+ *
+ * Flat (legacy — still supported):
+ *   <ServiceJsonLd
+ *     name={s.name}
+ *     description={s.description}
+ *     slug={s.slug}
+ *     startingFromUsd={s.startingFromUsd}
+ *   />
+ *
+ * Nested:
+ *   <ServiceJsonLd service={{ name, description, slug, priceRange: '$$$' }} />
  */
-export function ServiceJsonLd({
-  service,
-}: {
-  service: {
+export function ServiceJsonLd(props: {
+  // Nested form
+  service?: {
     name: string;
     description: string;
     slug: string;
-    // Optional — helps for services with real pricing surfaced publicly
     priceRange?: string;
   };
+  // Flat form (legacy)
+  name?: string;
+  description?: string;
+  slug?: string;
+  priceRange?: string;
+  startingFromUsd?: number | null;
 }) {
+  // Resolve either signature to a normalised shape
+  const name = props.service?.name ?? props.name;
+  const description = props.service?.description ?? props.description;
+  const slug = props.service?.slug ?? props.slug;
+
+  // priceRange precedence: explicit prop > derived from startingFromUsd > undefined
+  let priceRange = props.service?.priceRange ?? props.priceRange;
+  if (!priceRange && typeof props.startingFromUsd === 'number') {
+    // Rough Schema.org-friendly bands based on your services page
+    if (props.startingFromUsd >= 5000) priceRange = '$$$$';
+    else if (props.startingFromUsd >= 1500) priceRange = '$$$';
+    else if (props.startingFromUsd >= 500) priceRange = '$$';
+    else priceRange = '$';
+  }
+
+  // If required fields are missing, render nothing rather than a broken schema
+  if (!name || !description || !slug) return null;
+
   return ldScript({
     '@context': 'https://schema.org',
     '@type': 'Service',
-    name: service.name,
-    description: service.description,
+    name,
+    description,
     provider: {
       '@id': `${SITE_URL}/#organization`,
     },
@@ -243,29 +279,61 @@ export function ServiceJsonLd({
       { '@type': 'Country', name: 'United Kingdom' },
       { '@type': 'Country', name: 'United States' },
     ],
-    url: `${SITE_URL}/services/${service.slug}`,
-    ...(service.priceRange && { priceRange: service.priceRange }),
+    url: `${SITE_URL}/services/${slug}`,
+    ...(priceRange && { priceRange }),
+    ...(typeof props.startingFromUsd === 'number' && {
+      offers: {
+        '@type': 'Offer',
+        priceCurrency: 'USD',
+        price: props.startingFromUsd,
+        priceSpecification: {
+          '@type': 'PriceSpecification',
+          priceCurrency: 'USD',
+          minPrice: props.startingFromUsd,
+        },
+        availability: 'https://schema.org/InStock',
+      },
+    }),
   });
 }
 
 // ─── Optional: BreadcrumbList ─────────────────────────
+// ─── PATCH FOR components/seo/JsonLd.tsx ─────────────────────────────
+//
+// Find the `BreadcrumbJsonLd` function (near the bottom of the file)
+// and replace it with the version below. It now accepts EITHER `items`
+// or `trail` as the prop name, so existing callers using `trail` don't
+// break, and new callers using `items` also work.
+//
+// This is the only change needed. The rest of JsonLd.tsx stays as I sent it.
+
+// ─── Optional: BreadcrumbList ─────────────────────────
 /**
  * Adds a BreadcrumbList to any nested page for cleaner search result rendering.
+ *
+ * Both `items` and `trail` are accepted for backward compatibility.
+ *
  * Usage:
  *   <BreadcrumbJsonLd items={[
  *     { name: 'Services', href: '/services' },
  *     { name: 'Penetration Testing', href: '/services/penetration-testing' },
  *   ]} />
+ *
+ * Or (legacy signature — still works):
+ *   <BreadcrumbJsonLd trail={[...]} />
  */
 export function BreadcrumbJsonLd({
   items,
+  trail,
 }: {
-  items: { name: string; href: string }[];
+  items?: { name: string; href: string }[];
+  trail?: { name: string; href: string }[];
 }) {
+  const list = items ?? trail ?? [];
   return ldScript({
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
-    itemListElement: items.map((item, i) => ({
+    itemListElement: list.map((item, i) => ({
       '@type': 'ListItem',
       position: i + 1,
       name: item.name,

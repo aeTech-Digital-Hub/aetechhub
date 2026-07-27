@@ -50,15 +50,13 @@ export default async function HomePage() {
                 style={{ background: "var(--brand)" }}
               />
               <span className="text-[12px] font-mono tracking-wide text-ink-2">
-                Available for projects · 
+                Available for projects ·
               </span>
             </div>
 
             <h1 className="h-display fade-in-2 text-[42px] sm:text-[56px] lg:text-[72px] tracking-tightest mb-7 leading-[1.02]">
               Software,{" "}
-              <span className="font-light gradient-text">
-                built right
-              </span>
+              <span className="font-light gradient-text">built right</span>
               <br />
               the first time.
             </h1>
@@ -168,6 +166,7 @@ export default async function HomePage() {
                 services: ["web-product", "saas"],
                 gradient: "linear-gradient(135deg, #F8F2FB 0%, #EDE3F4 100%)",
                 mark: "B",
+                img: "/aeweb1.avif",
               },
               {
                 title: "Data",
@@ -175,6 +174,7 @@ export default async function HomePage() {
                 services: ["data-analysis", "machine-learning"],
                 gradient: "linear-gradient(135deg, #F4ECFC 0%, #E8D5F5 100%)",
                 mark: "D",
+                img: "/aedatapic.avif",
               },
               {
                 title: "Secure",
@@ -182,6 +182,7 @@ export default async function HomePage() {
                 services: ["security-analysis", "penetration-testing"],
                 gradient: "linear-gradient(135deg, #EDE3F4 0%, #C8A8DD 100%)",
                 mark: "S",
+                img: "/aesecurity.avif",
               },
             ].map((p) => (
               <StaggerItem key={p.title}>
@@ -452,7 +453,7 @@ export default async function HomePage() {
           ))}
         </StaggerReveal>
       </section>
-      
+
       <Testimonials />
 
       <HowToStart />
