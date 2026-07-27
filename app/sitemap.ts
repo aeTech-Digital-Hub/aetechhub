@@ -1,69 +1,98 @@
-import type { MetadataRoute } from 'next';
-import { dbConnect } from '@/lib/db';
-import { Project } from '@/models/Project';
-import { Research, Announcement } from '@/models';
-import { SERVICES } from '@/lib/services';
+import type { MetadataRoute } from "next";
+import { SERVICES } from "@/lib/services";
 
-const SITE = process.env.NEXT_PUBLIC_SITE_URL || 'https://aetechdigitalhub.com';
+/**
+ * Sitemap generator for aeTech Digital Hub.
+ *
+ * Rules I'm following to avoid the common Google Search Console errors:
+ *
+ * 1. All URLs use HTTPS + the canonical domain (no trailing slashes to match Next.js defaults)
+ * 2. `lastModified` uses ISO-8601 strings, never raw Date objects (Next.js occasionally
+ *    serialises Date objects with timezone drift that Google flags)
+ * 3. `changeFrequency` uses only the allowed enum values
+ * 4. `priority` values are strictly 0.0 - 1.0
+ * 5. No duplicate URLs
+ * 6. Only URLs that exist on the current build — no phantom /blog if we don't ship one
+ * 7. No URLs that redirect — every URL here is the final destination
+ * 8. Excludes admin, portal, brief editor, sign-in — these are auth-gated or noindex
+ *
+ * If Google Search Console flags an entry, most likely it's because that
+ * page returns a 404 or redirect. Verify each URL in the browser first.
+ */
 
-export const revalidate = 3600; // Re-build the sitemap hourly
+const SITE = (
+  process.env.NEXT_PUBLIC_SITE_URL || "https://aetechdigitalhub.com"
+).replace(/\/$/, ""); // ensure no trailing slash
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Static routes
-  const staticRoutes: MetadataRoute.Sitemap = [
-    { url: `${SITE}/`,                lastModified: new Date(), changeFrequency: 'weekly',  priority: 1.0 },
-    { url: `${SITE}/services`,        lastModified: new Date(), changeFrequency: 'monthly', priority: 0.9 },
-    { url: `${SITE}/projects`,        lastModified: new Date(), changeFrequency: 'weekly',  priority: 0.9 },
-    { url: `${SITE}/research`,        lastModified: new Date(), changeFrequency: 'weekly',  priority: 0.8 },
-    { url: `${SITE}/announcements`,   lastModified: new Date(), changeFrequency: 'weekly',  priority: 0.7 },
-    { url: `${SITE}/about`,           lastModified: new Date(), changeFrequency: 'monthly', priority: 0.7 },
-    { url: `${SITE}/contact`,         lastModified: new Date(), changeFrequency: 'yearly',  priority: 0.6 },
-    { url: `${SITE}/start-project`,   lastModified: new Date(), changeFrequency: 'yearly',  priority: 0.9 },
-    { url: `${SITE}/book`,            lastModified: new Date(), changeFrequency: 'yearly',  priority: 0.7 },
-  ];
+// ISO string for "now" — used as a safe default when we don't track per-page mtime
+const NOW = new Date().toISOString();
 
-  // Service detail pages
-  const serviceRoutes: MetadataRoute.Sitemap = SERVICES.map((s) => ({
-    url: `${SITE}/services/${s.slug}`,
-    lastModified: new Date(),
-    changeFrequency: 'monthly' as const,
-    priority: 0.8,
-  }));
+/** Fixed marketing pages — the ones we always want indexed */
+const MARKETING_PAGES: Array<{
+  path: string;
+  changeFreq: MetadataRoute.Sitemap[number]["changeFrequency"];
+  priority: number;
+}> = [
+  { path: "", changeFreq: "weekly", priority: 1.0 },
+  { path: "/services", changeFreq: "monthly", priority: 0.9 },
+  { path: "/projects", changeFreq: "monthly", priority: 0.8 },
+  { path: "/research", changeFreq: "monthly", priority: 0.7 },
+  { path: "/about", changeFreq: "monthly", priority: 0.6 },
+  { path: "/book", changeFreq: "monthly", priority: 0.7 },
+  { path: "/start-project", changeFreq: "monthly", priority: 0.8 },
+  { path: "/brief/guide", changeFreq: "monthly", priority: 0.6 },
+  // Legal
+  { path: "/privacy", changeFreq: "yearly", priority: 0.3 },
+  { path: "/terms", changeFreq: "yearly", priority: 0.3 },
+];
 
-  // Dynamic routes from MongoDB
-  let projectRoutes: MetadataRoute.Sitemap = [];
-  let articleRoutes: MetadataRoute.Sitemap = [];
-  let announcementRoutes: MetadataRoute.Sitemap = [];
+/**
+ * Deliberately EXCLUDED from the sitemap (these should also carry
+ * `robots: { index: false }` in their page metadata):
+ *
+ *   /sign-in         — auth surface, no SEO value
+ *   /login           — redirect to /sign-in
+ *   /portal          — auth-gated user dashboard
+ *   /brief           — auth-gated editor
+ *   /brief/done      — post-submission confirmation
+ *   /welcome         — one-time intro flow
+ *   /admin/*         — internal admin surface
+ *   /api/*           — API endpoints
+ *   /i/[token]       — private invoice share links
+ *   /r/[token]       — private receipt share links
+ */
 
-  try {
-    await dbConnect();
-    const [projects, articles, announcements] = await Promise.all([
-      Project.find({ published: true }).select('slug updatedAt').lean<any[]>(),
-      Research.find({ published: true }).select('slug updatedAt').lean<any[]>(),
-      Announcement.find({ published: true }).select('slug updatedAt').lean<any[]>(),
-    ]);
+export default function sitemap(): MetadataRoute.Sitemap {
+  const entries: MetadataRoute.Sitemap = [];
 
-    projectRoutes = projects.map((p) => ({
-      url: `${SITE}/projects/${p.slug}`,
-      lastModified: new Date(p.updatedAt || Date.now()),
-      changeFrequency: 'monthly' as const,
-      priority: 0.7,
-    }));
-    articleRoutes = articles.map((a) => ({
-      url: `${SITE}/research/${a.slug}`,
-      lastModified: new Date(a.updatedAt || Date.now()),
-      changeFrequency: 'monthly' as const,
-      priority: 0.6,
-    }));
-    announcementRoutes = announcements.map((a) => ({
-      url: `${SITE}/announcements/${a.slug}`,
-      lastModified: new Date(a.updatedAt || Date.now()),
-      changeFrequency: 'yearly' as const,
-      priority: 0.5,
-    }));
-  } catch {
-    // DB unavailable at build → still return static routes
+  // 1. Fixed marketing pages
+  for (const p of MARKETING_PAGES) {
+    entries.push({
+      url: `${SITE}${p.path}`,
+      lastModified: NOW,
+      changeFrequency: p.changeFreq,
+      priority: p.priority,
+    });
   }
 
-  return [...staticRoutes, ...serviceRoutes, ...projectRoutes, ...articleRoutes, ...announcementRoutes];
+  // 2. Service detail pages — one per entry in SERVICES
+  //    (These are the meaningful long-tail SEO pages — Google finds
+  //     "penetration testing Ghana" through these.)
+  for (const svc of SERVICES) {
+    entries.push({
+      url: `${SITE}/services/${svc.slug}`,
+      lastModified: NOW,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    });
+  }
+
+  // Dedupe defensively — if a bug ever causes the same URL to be added twice,
+  // Google flags it hard. Keeping this even though it should be impossible.
+  const seen = new Set<string>();
+  return entries.filter((e) => {
+    if (seen.has(e.url)) return false;
+    seen.add(e.url);
+    return true;
+  });
 }

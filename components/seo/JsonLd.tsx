@@ -14,7 +14,7 @@
  */
 
 const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL || 'https://aetechorg.com';
+  process.env.NEXT_PUBLIC_SITE_URL || 'https://aetechdigitalhub.com';
 
 // Studio contact facts — single source of truth
 const STUDIO = {

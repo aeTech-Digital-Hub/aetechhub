@@ -30,7 +30,7 @@ export type EmailPayload = {
 
 export async function sendEmail(payload: EmailPayload) {
   const t = getTransporter();
-  const from = process.env.SMTP_FROM || 'aeTech Digital Hub <hello@aetechorg.com>';
+  const from = process.env.SMTP_FROM || 'aeTech Digital Hub <hello@aetechdigitalhub.com>';
   if (!t) {
     console.warn('[email] SMTP not configured, would send:', payload.subject, '→', payload.to);
     return { ok: true, mocked: true };
@@ -41,7 +41,7 @@ export async function sendEmail(payload: EmailPayload) {
 
 // ── BRANDED HTML WRAPPER ───────────────────────────
 export function emailLayout({ heading, body, cta }: { heading: string; body: string; cta?: { label: string; href: string } }) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || 'https://aetechorg.com';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXTAUTH_URL || 'https://aetechdigitalhub.com';
   const logoUrl = `${baseUrl}/aetech-logo-light.png`;
 
   return `

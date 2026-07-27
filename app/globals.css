@@ -274,3 +274,69 @@ html, body {
 
 .link-brand { color: var(--ink); transition: color 150ms; }
 .link-brand:hover { color: var(--brand); }
+
+
+
+/* ─── PATCH FOR app/globals.css ─────────────────────────────
+ *
+ * If your globals.css doesn't already have a `.prose-brand` class, add
+ * this at the bottom. It provides base link, list, and paragraph styling
+ * for the privacy policy without pulling in a full typography plugin.
+ *
+ * Skip this if you already have a prose-* class you'd rather use.
+ */
+
+.prose-brand {
+  /* Base text */
+  color: var(--ink-2);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.prose-brand a {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  transition: color 0.15s ease;
+}
+
+.prose-brand a:hover {
+  color: var(--brand-600);
+}
+
+.prose-brand strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.prose-brand ul {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0 0;
+}
+
+.prose-brand ul li {
+  position: relative;
+  padding-left: 20px;
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+.prose-brand ul li::before {
+  content: '·';
+  color: var(--brand);
+  font-weight: bold;
+  position: absolute;
+  left: 0;
+  top: -2px;
+  font-size: 20px;
+}
+
+.prose-brand p {
+  margin-bottom: 12px;
+}
+
+.prose-brand p:last-child {
+  margin-bottom: 0;
+}
