@@ -17,6 +17,53 @@ import { HowToStart } from "@/components/marketing/HowToStart";
 
 export const revalidate = 3600;
 
+
+{
+  /*
+  ─────────────────────────────────────────────────────────
+  Place this constant near the top of the file (outside the
+  component's return, alongside your other imports/constants).
+  Removing `img` from any entry will make that card fall back
+  to the mark letter automatically.
+  ─────────────────────────────────────────────────────────
+*/
+}
+type WhatWeDoItem = {
+  title: string;
+  desc: string;
+  services: string[];
+  gradient: string;
+  mark: string;
+  img?: string; // optional — undefined falls back to mark
+};
+
+const WHAT_WE_DO: WhatWeDoItem[] = [
+  {
+    title: "Build",
+    desc: "Custom websites, SaaS platforms, and product surfaces. Modern stacks, no themes, no shortcuts.",
+    services: ["web-product", "saas"],
+    gradient: "linear-gradient(135deg, #F8F2FB 0%, #EDE3F4 100%)",
+    mark: "B",
+    img: "/aeweb1.avif",
+  },
+  {
+    title: "Data",
+    desc: "Turn your data into decisions. ETL, dashboards, machine learning, and clean APIs.",
+    services: ["data-analysis", "machine-learning"],
+    gradient: "linear-gradient(135deg, #F4ECFC 0%, #E8D5F5 100%)",
+    mark: "D",
+    img: "/aedatapic.avif",
+  },
+  {
+    title: "Secure",
+    desc: "Architecture reviews and adversarial testing. Find what attackers will find — first.",
+    services: ["security-analysis", "penetration-testing"],
+    gradient: "linear-gradient(135deg, #EDE3F4 0%, #C8A8DD 100%)",
+    mark: "S",
+    img: "/aesecurity.avif",
+  },
+];
+
 async function getData() {
   try {
     await dbConnect();
@@ -29,6 +76,8 @@ async function getData() {
     return { projects: [] };
   }
 }
+
+
 
 export default async function HomePage() {
   const { projects } = await getData();
@@ -159,57 +208,56 @@ export default async function HomePage() {
           </Reveal>
 
           <StaggerReveal className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {[
-              {
-                title: "Build",
-                desc: "Custom websites, SaaS platforms, and product surfaces. Modern stacks, no themes, no shortcuts.",
-                services: ["web-product", "saas"],
-                gradient: "linear-gradient(135deg, #F8F2FB 0%, #EDE3F4 100%)",
-                mark: "B",
-                img: "/aeweb1.avif",
-              },
-              {
-                title: "Data",
-                desc: "Turn your data into decisions. ETL, dashboards, machine learning, and clean APIs.",
-                services: ["data-analysis", "machine-learning"],
-                gradient: "linear-gradient(135deg, #F4ECFC 0%, #E8D5F5 100%)",
-                mark: "D",
-                img: "/aedatapic.avif",
-              },
-              {
-                title: "Secure",
-                desc: "Architecture reviews and adversarial testing. Find what attackers will find — first.",
-                services: ["security-analysis", "penetration-testing"],
-                gradient: "linear-gradient(135deg, #EDE3F4 0%, #C8A8DD 100%)",
-                mark: "S",
-                img: "/aesecurity.avif",
-              },
-            ].map((p) => (
+            {WHAT_WE_DO.map((p) => (
               <StaggerItem key={p.title}>
                 <SpotlightCard
                   className="group block border border-rule rounded-2xl p-4 bg-white lift h-full"
                   spotlightColor="rgba(45, 13, 80, 0.10)"
                 >
+                  {/* Visual — image if provided, otherwise the big mark letter */}
                   <div
-                    className="aspect-[4/3] rounded-xl mb-5 grid place-items-center overflow-hidden relative"
+                    className="aspect-[4/3] rounded-xl mb-5 overflow-hidden relative"
                     style={{ background: p.gradient }}
                   >
-                    <span
-                      className="h-display text-6xl lg:text-7xl float-slow"
-                      style={{ color: "var(--brand)" }}
-                    >
-                      {p.mark}
-                    </span>
-                    <div
-                      className="absolute inset-0 opacity-30"
-                      style={{
-                        backgroundImage:
-                          "radial-gradient(circle at center, rgba(45,13,80,0.15) 1px, transparent 1px)",
-                        backgroundSize: "16px 16px",
-                      }}
-                    />
+                    {p.img ? (
+                      <>
+                        <Image
+                          src={p.img}
+                          alt={`${p.title} — aeTech`}
+                          fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                        />
+                        {/* Subtle brand-purple wash so photos share the section's warmth */}
+                        <div
+                          className="absolute inset-0 pointer-events-none mix-blend-multiply opacity-[0.08]"
+                          style={{ background: "var(--brand)" }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        {/* Fallback — the original mark treatment */}
+                        <div className="absolute inset-0 grid place-items-center">
+                          <span
+                            className="h-display text-6xl lg:text-7xl float-slow"
+                            style={{ color: "var(--brand)" }}
+                          >
+                            {p.mark}
+                          </span>
+                        </div>
+                        <div
+                          className="absolute inset-0 opacity-30 pointer-events-none"
+                          style={{
+                            backgroundImage:
+                              "radial-gradient(circle at center, rgba(45,13,80,0.15) 1px, transparent 1px)",
+                            backgroundSize: "16px 16px",
+                          }}
+                        />
+                      </>
+                    )}
                   </div>
 
+                  {/* Copy */}
                   <div className="px-1">
                     <h3 className="h-display text-[20px] tracking-tight mb-2">
                       {p.title}
@@ -256,78 +304,9 @@ export default async function HomePage() {
             </div>
           </Reveal>
         </section>
-
-        {/* ─────────────────────────────────────────
-            WHY US
-            ───────────────────────────────────────── */}
-        <section className="container-px py-24 lg:py-32 border-b border-rule bg-base">
-          <Reveal>
-            <div className="max-w-2xl mb-12 lg:mb-16">
-              <p className="eyebrow mb-4">Why us</p>
-              <h2 className="h-display text-[32px] lg:text-[44px] tracking-tighter">
-                Calm engineering, no surprises.
-              </h2>
-              <p className="text-[16px] lg:text-[17px] text-ink-2 mt-4 max-w-xl leading-relaxed">
-                The kind of working relationship you wish you had with every
-                team you&apos;ve hired. Steady cadence, real updates, no
-                theatre.
-              </p>
-            </div>
-          </Reveal>
-
-          <StaggerReveal className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {[
-              {
-                n: "01",
-                t: "Senior, end to end",
-                d: "The senior who scopes your project is the senior who builds it. No bait-and-switch, no juniors learning on your dime.",
-              },
-              {
-                n: "02",
-                t: "Honest scoping",
-                d: "We tell you what something costs before you commit. We say no when we are not the right fit.",
-              },
-              {
-                n: "03",
-                t: "Weekly demos",
-                d: "Real working software at every checkpoint. Nothing is a surprise. No 8-week silence followed by a wall of code.",
-              },
-              {
-                n: "04",
-                t: "30 days post-launch",
-                d: "We don't disappear after delivery. Documentation, training, and a real human you can call.",
-              },
-            ].map((p) => (
-              <StaggerItem key={p.n}>
-                <SpotlightCard
-                  className="group block border border-rule rounded-2xl p-5 bg-white lift h-full"
-                  spotlightColor="rgba(45, 13, 80, 0.08)"
-                >
-                  <div className="flex items-center justify-between mb-6">
-                    <span
-                      className="font-mono text-[12px] tracking-wider"
-                      style={{ color: "var(--brand)" }}
-                    >
-                      {p.n}
-                    </span>
-                    <span
-                      className="w-1.5 h-1.5 rounded-full pulse-soft"
-                      style={{ background: "var(--brand)" }}
-                    />
-                  </div>
-
-                  <h3 className="font-medium text-[15px] tracking-tight mb-2 text-ink">
-                    {p.t}
-                  </h3>
-                  <p className="text-[13px] text-ink-2 leading-relaxed">
-                    {p.d}
-                  </p>
-                </SpotlightCard>
-              </StaggerItem>
-            ))}
-          </StaggerReveal>
-        </section>
       </div>
+
+
 
       {/* ─────────────────────────────────────────
           RECENT PROJECTS
