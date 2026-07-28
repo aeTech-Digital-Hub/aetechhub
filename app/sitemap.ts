@@ -1,96 +1,182 @@
 import type { MetadataRoute } from "next";
+import { dbConnect } from "@/lib/db";
+import { Project } from "@/models/Project";
+import { Research, Announcement } from "@/models";
 import { SERVICES } from "@/lib/services";
 
 /**
  * Sitemap generator for aeTech Digital Hub.
  *
- * Rules I'm following to avoid the common Google Search Console errors:
- *
- * 1. All URLs use HTTPS + the canonical domain (no trailing slashes to match Next.js defaults)
- * 2. `lastModified` uses ISO-8601 strings, never raw Date objects (Next.js occasionally
- *    serialises Date objects with timezone drift that Google flags)
- * 3. `changeFrequency` uses only the allowed enum values
- * 4. `priority` values are strictly 0.0 - 1.0
- * 5. No duplicate URLs
- * 6. Only URLs that exist on the current build — no phantom /blog if we don't ship one
- * 7. No URLs that redirect — every URL here is the final destination
- * 8. Excludes admin, portal, brief editor, sign-in — these are auth-gated or noindex
- *
- * If Google Search Console flags an entry, most likely it's because that
- * page returns a 404 or redirect. Verify each URL in the browser first.
+ * Rules I'm following to avoid Search Console errors:
+ *   1. HTTPS, canonical domain, NO trailing slashes (matches Next.js behaviour)
+ *   2. `lastModified` as ISO-8601 strings — never raw Date objects (timezone drift)
+ *   3. `changeFrequency` uses only allowed enum values
+ *   4. `priority` strictly 0.0 - 1.0
+ *   5. Deduplicated
+ *   6. Excludes auth-gated / private routes
+ *   7. DB failures degrade gracefully — static routes still returned
+ *   8. Bounded query result count so a huge collection can't blow memory
  */
 
 const SITE = (
   process.env.NEXT_PUBLIC_SITE_URL || "https://aetechdigitalhub.com"
-).replace(/\/$/, ""); // ensure no trailing slash
+).replace(/\/$/, "");
 
-// ISO string for "now" — used as a safe default when we don't track per-page mtime
-const NOW = new Date().toISOString();
+const MAX_ITEMS_PER_COLLECTION = 500;
 
-/** Fixed marketing pages — the ones we always want indexed */
-const MARKETING_PAGES: Array<{
-  path: string;
-  changeFreq: MetadataRoute.Sitemap[number]["changeFrequency"];
-  priority: number;
-}> = [
-  { path: "", changeFreq: "weekly", priority: 1.0 },
-  { path: "/services", changeFreq: "monthly", priority: 0.9 },
-  { path: "/projects", changeFreq: "monthly", priority: 0.8 },
-  { path: "/research", changeFreq: "monthly", priority: 0.7 },
-  { path: "/about", changeFreq: "monthly", priority: 0.6 },
-  { path: "/book", changeFreq: "monthly", priority: 0.7 },
-  { path: "/start-project", changeFreq: "monthly", priority: 0.8 },
-  { path: "/brief/guide", changeFreq: "monthly", priority: 0.6 },
-  // Legal
-  { path: "/privacy", changeFreq: "yearly", priority: 0.3 },
-  { path: "/terms", changeFreq: "yearly", priority: 0.3 },
-];
+export const revalidate = 3600;
 
-/**
- * Deliberately EXCLUDED from the sitemap (these should also carry
- * `robots: { index: false }` in their page metadata):
- *
- *   /sign-in         — auth surface, no SEO value
- *   /login           — redirect to /sign-in
- *   /portal          — auth-gated user dashboard
- *   /brief           — auth-gated editor
- *   /brief/done      — post-submission confirmation
- *   /welcome         — one-time intro flow
- *   /admin/*         — internal admin surface
- *   /api/*           — API endpoints
- *   /i/[token]       — private invoice share links
- *   /r/[token]       — private receipt share links
- */
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const now = new Date().toISOString();
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const entries: MetadataRoute.Sitemap = [];
-
-  // 1. Fixed marketing pages
-  for (const p of MARKETING_PAGES) {
-    entries.push({
-      url: `${SITE}${p.path}`,
-      lastModified: NOW,
-      changeFrequency: p.changeFreq,
-      priority: p.priority,
-    });
-  }
-
-  // 2. Service detail pages — one per entry in SERVICES
-  //    (These are the meaningful long-tail SEO pages — Google finds
-  //     "penetration testing Ghana" through these.)
-  for (const svc of SERVICES) {
-    entries.push({
-      url: `${SITE}/services/${svc.slug}`,
-      lastModified: NOW,
+  const staticRoutes: MetadataRoute.Sitemap = [
+    {
+      url: `${SITE}`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 1.0,
+    },
+    {
+      url: `${SITE}/services`,
+      lastModified: now,
       changeFrequency: "monthly",
+      priority: 0.9,
+    },
+    {
+      url: `${SITE}/projects`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
+    {
+      url: `${SITE}/research`,
+      lastModified: now,
+      changeFrequency: "weekly",
       priority: 0.8,
-    });
+    },
+    {
+      url: `${SITE}/announcements`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
+      url: `${SITE}/about`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.7,
+    },
+    {
+      url: `${SITE}/contact`,
+      lastModified: now,
+      changeFrequency: "yearly",
+      priority: 0.6,
+    },
+    {
+      url: `${SITE}/start-project`,
+      lastModified: now,
+      changeFrequency: "yearly",
+      priority: 0.9,
+    },
+    {
+      url: `${SITE}/book`,
+      lastModified: now,
+      changeFrequency: "yearly",
+      priority: 0.7,
+    },
+    {
+      url: `${SITE}/brief/guide`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.6,
+    },
+    {
+      url: `${SITE}/privacy`,
+      lastModified: now,
+      changeFrequency: "yearly",
+      priority: 0.3,
+    },
+  ];
+
+  const serviceRoutes: MetadataRoute.Sitemap = SERVICES.map((s) => ({
+    url: `${SITE}/services/${s.slug}`,
+    lastModified: now,
+    changeFrequency: "monthly",
+    priority: 0.8,
+  }));
+
+  let projectRoutes: MetadataRoute.Sitemap = [];
+  let researchRoutes: MetadataRoute.Sitemap = [];
+  let announcementRoutes: MetadataRoute.Sitemap = [];
+
+  try {
+    await dbConnect();
+    const [projects, research, announcements] = await Promise.all([
+      Project.find({ published: true })
+        .select("slug updatedAt")
+        .limit(MAX_ITEMS_PER_COLLECTION)
+        .lean<Array<{ slug: string; updatedAt?: Date }>>(),
+      Research.find({ published: true })
+        .select("slug updatedAt")
+        .limit(MAX_ITEMS_PER_COLLECTION)
+        .lean<Array<{ slug: string; updatedAt?: Date }>>(),
+      Announcement.find({ published: true })
+        .select("slug updatedAt")
+        .limit(MAX_ITEMS_PER_COLLECTION)
+        .lean<Array<{ slug: string; updatedAt?: Date }>>(),
+    ]);
+
+    projectRoutes = projects
+      .filter((p) => p.slug)
+      .map((p) => ({
+        url: `${SITE}/projects/${p.slug}`,
+        lastModified: (p.updatedAt
+          ? new Date(p.updatedAt)
+          : new Date()
+        ).toISOString(),
+        changeFrequency: "monthly",
+        priority: 0.7,
+      }));
+
+    researchRoutes = research
+      .filter((r) => r.slug)
+      .map((r) => ({
+        url: `${SITE}/research/${r.slug}`,
+        lastModified: (r.updatedAt
+          ? new Date(r.updatedAt)
+          : new Date()
+        ).toISOString(),
+        changeFrequency: "monthly",
+        priority: 0.6,
+      }));
+
+    announcementRoutes = announcements
+      .filter((a) => a.slug)
+      .map((a) => ({
+        url: `${SITE}/announcements/${a.slug}`,
+        lastModified: (a.updatedAt
+          ? new Date(a.updatedAt)
+          : new Date()
+        ).toISOString(),
+        changeFrequency: "yearly",
+        priority: 0.5,
+      }));
+  } catch (err) {
+    console.error(
+      "[sitemap] DB fetch failed, returning static routes only:",
+      err,
+    );
   }
 
-  // Dedupe defensively — if a bug ever causes the same URL to be added twice,
-  // Google flags it hard. Keeping this even though it should be impossible.
+  const all = [
+    ...staticRoutes,
+    ...serviceRoutes,
+    ...projectRoutes,
+    ...researchRoutes,
+    ...announcementRoutes,
+  ];
   const seen = new Set<string>();
-  return entries.filter((e) => {
+  return all.filter((e) => {
     if (seen.has(e.url)) return false;
     seen.add(e.url);
     return true;
