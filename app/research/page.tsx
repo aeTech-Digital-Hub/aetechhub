@@ -50,9 +50,7 @@ export default async function ResearchPage() {
             <p className="eyebrow mb-5">Research</p>
             <h1 className="h-display text-[44px] sm:text-[56px] lg:text-[64px] tracking-tightest mb-5 leading-[1.02]">
               Notes from{" "}
-              <span className="font-light gradient-text">
-                the Hub.
-              </span>
+              <span className="font-light gradient-text">the Hub.</span>
             </h1>
             <p className="text-[16px] lg:text-[17px] text-ink-2 leading-relaxed">
               Engineering notes, design opinions, and the occasional research
@@ -187,9 +185,7 @@ export default async function ResearchPage() {
               <h2 className="h-display text-[36px] lg:text-[52px] tracking-tightest mb-5 leading-[1.02]">
                 Ready to start
                 <br />
-                <span className="italic font-light gradient-text">
-                  your project?
-                </span>
+                <span className=" font-light gradient-text">your project?</span>
               </h2>
               <p className="text-[16px] lg:text-[17px] text-ink-2 mb-9 leading-relaxed max-w-md">
                 Don&apos;t see a package that fits your exact needs? We offer
@@ -225,8 +221,9 @@ export default async function ResearchPage() {
               style={{ background: "#EDE3F4" }}
             >
               <Image
-                src="/cta-visual.png"
+                src="/projects.avif"
                 alt="Software shipped by aeTech"
+                loading="eager"
                 fill
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 className="object-cover lg:object-contain object-center lg:object-[center_120%] scale-110 lg:scale-100 cine-image"

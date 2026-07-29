@@ -425,7 +425,7 @@ export default async function ProjectDetail({
               <h2 className="h-display text-[36px] lg:text-[52px] tracking-tightest mb-5 leading-[1.02]">
                 Let&apos;s build
                 <br />
-                <span className="italic font-light gradient-text">
+                <span className=" font-light gradient-text">
                   yours next.
                 </span>
               </h2>
@@ -462,7 +462,7 @@ export default async function ProjectDetail({
               style={{ background: "#EDE3F4" }}
             >
               <Image
-                src="/cta-visual.png"
+                src="/p3.avif"
                 alt="Software shipped by aeTech"
                 fill
                 sizes="(max-width: 1024px) 100vw, 50vw"

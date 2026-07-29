@@ -42,7 +42,7 @@ export function CTA({
   secondaryLabel = "Book a 30-min call",
   primaryTrack = "cta_primary",
   secondaryTrack = "cta_secondary",
-  image = "/cta-visual.png",
+  image = "/projects.avif",
   imageAlt = "Software shipped by aeTech",
 }: CTAProps) {
   return (
@@ -99,6 +99,7 @@ export function CTA({
               <Image
                 src={image}
                 alt={imageAlt}
+                loading="eager"
                 fill
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 className="object-cover lg:object-contain object-center lg:object-[center_120%] scale-110 lg:scale-100 cine-image"

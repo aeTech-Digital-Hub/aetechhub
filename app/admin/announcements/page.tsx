@@ -1,86 +1,218 @@
-'use client';
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Plus } from 'lucide-react';
-import { formatDate, slugify } from '@/lib/utils';
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Plus, Pin, Eye, EyeOff, Calendar, Edit } from "lucide-react";
+import { dbConnect } from "@/lib/db";
+import { Announcement } from "@/models";
+import { getCurrentUser } from "@/lib/auth-server";
 
-export default function AnnouncementsAdminPage() {
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showNew, setShowNew] = useState(false);
-  const [draft, setDraft] = useState({ title: '', slug: '', type: 'announcement', excerpt: '', body: '', pinned: false, published: true });
+export const dynamic = "force-dynamic";
 
-  async function load() {
-    const r = await fetch('/api/announcements?published=0');
-    const d = await r.json();
-    setItems(d.items || []);
-    setLoading(false);
+export const metadata = {
+  title: "Announcements",
+  robots: { index: false, follow: false },
+};
+
+type AnnouncementLean = {
+  _id: string;
+  slug: string;
+  title: string;
+  summary?: string;
+  category?: string;
+  pinned?: boolean;
+  published?: boolean;
+  publishedAt?: Date;
+  updatedAt?: Date;
+  createdAt?: Date;
+};
+
+async function getAll(): Promise<AnnouncementLean[]> {
+  try {
+    await dbConnect();
+    const items = await Announcement.find({})
+      .sort({ pinned: -1, publishedAt: -1, updatedAt: -1, createdAt: -1 })
+      .limit(200)
+      .lean<AnnouncementLean[]>();
+    return JSON.parse(JSON.stringify(items));
+  } catch (err) {
+    console.error("[admin/announcements] fetch failed:", err);
+    return [];
   }
-  useEffect(() => { load(); }, []);
+}
 
-  async function create() {
-    if (!draft.title) return;
-    const slug = draft.slug || slugify(draft.title);
-    await fetch('/api/announcements', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...draft, slug }),
-    });
-    setDraft({ title: '', slug: '', type: 'announcement', excerpt: '', body: '', pinned: false, published: true });
-    setShowNew(false);
-    load();
-  }
+function fmtDate(d: Date | string | undefined): string {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export default async function AdminAnnouncementsPage() {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin")
+    redirect("/sign-in?next=/admin/announcements");
+
+  const items = await getAll();
+  const drafts = items.filter((a) => !a.published);
+  const published = items.filter((a) => a.published);
 
   return (
     <div className="space-y-8">
-      <div className="flex items-end justify-between">
+      <div className="flex items-baseline justify-between">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-wider text-purple-700 mb-2">— Announcements</p>
-          <h1 className="h-display text-4xl">News & launches</h1>
+          <h1 className="h-display text-[28px] tracking-tighter mb-2">
+            Announcements
+          </h1>
+          <p className="text-[13.5px] text-ink-2 max-w-2xl leading-relaxed">
+            Studio news, launches, and updates. Drafts stay private; publishing
+            makes an item visible on the public announcements page.
+          </p>
         </div>
-        <button onClick={() => setShowNew(!showNew)} className="btn-primary"><Plus className="w-4 h-4" /> New announcement</button>
+        <Link
+          href="/admin/announcements/new"
+          className="btn-primary !py-2 !text-xs"
+        >
+          <Plus className="w-3.5 h-3.5" strokeWidth={2} />
+          New announcement
+        </Link>
       </div>
 
-      {showNew && (
-        <div className="border border-rule bg-bone p-6 space-y-4">
-          <input placeholder="Title *" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value, slug: slugify(e.target.value) })} className="w-full border-b border-rule py-2 focus:outline-none focus:border-purple-700" />
-          <input placeholder="Slug (auto from title)" value={draft.slug} onChange={e => setDraft({ ...draft, slug: e.target.value })} className="w-full border-b border-rule py-2 text-sm font-mono focus:outline-none" />
-          <select value={draft.type} onChange={e => setDraft({ ...draft, type: e.target.value })} className="border border-rule px-3 py-2 text-sm">
-            <option value="announcement">Announcement</option>
-            <option value="launch">Launch</option>
-            <option value="patronage">Patronage</option>
-            <option value="milestone">Milestone</option>
-          </select>
-          <textarea placeholder="One-line excerpt" value={draft.excerpt} onChange={e => setDraft({ ...draft, excerpt: e.target.value })} rows={2} className="w-full border border-rule p-3 text-sm focus:outline-none focus:border-purple-700" />
-          <textarea placeholder="Body (plain text)" value={draft.body} onChange={e => setDraft({ ...draft, body: e.target.value })} rows={8} className="w-full border border-rule p-3 text-sm focus:outline-none focus:border-purple-700" />
-          <div className="flex items-center gap-6 text-sm">
-            <label className="flex items-center gap-2"><input type="checkbox" checked={draft.pinned} onChange={e => setDraft({ ...draft, pinned: e.target.checked })} /> Pin to top bar</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={draft.published} onChange={e => setDraft({ ...draft, published: e.target.checked })} /> Publish immediately</label>
-          </div>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setShowNew(false)} className="text-sm text-ink/60 hover:text-ink px-3 py-2">Cancel</button>
-            <button onClick={create} className="btn-primary !text-xs !py-2">Publish</button>
-          </div>
+      {items.length === 0 && (
+        <div className="text-center py-16 rounded-xl border border-rule bg-tint-1">
+          <p className="text-[13.5px] text-ink-3 italic mb-4">
+            No announcements yet.
+          </p>
+          <Link
+            href="/admin/announcements/new"
+            className="btn-primary !py-2 !text-xs inline-flex"
+          >
+            <Plus className="w-3.5 h-3.5" strokeWidth={2} />
+            Write your first
+          </Link>
         </div>
       )}
 
-      <div className="border border-rule bg-bone divide-y divide-rule">
-        {loading && <p className="p-6 text-ink/50 italic">Loading…</p>}
-        {!loading && items.length === 0 && <p className="p-6 text-ink/50 italic">No announcements yet.</p>}
-        {items.map((a: any) => (
-          <div key={a._id} className="p-5 flex items-baseline justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 bg-purple-100 text-purple-800 rounded-full">{a.type}</span>
-                {a.pinned && <span className="text-[10px] text-accent">★ pinned</span>}
-                {!a.published && <span className="text-[10px] text-ink/50">draft</span>}
-              </div>
-              <h3 className="font-display text-xl">{a.title}</h3>
-              <p className="text-xs text-ink/50 mt-1">{a.publishedAt ? formatDate(a.publishedAt) : 'unpublished'}</p>
-            </div>
-            <Link href={`/announcements/${a.slug}`} target="_blank" className="text-xs text-purple-700 hover:underline">View public →</Link>
-          </div>
-        ))}
-      </div>
+      {drafts.length > 0 && (
+        <Section
+          title="Drafts"
+          subtitle={`${drafts.length} unpublished ${drafts.length === 1 ? "item" : "items"}`}
+          items={drafts}
+        />
+      )}
+
+      {published.length > 0 && (
+        <Section
+          title="Published"
+          subtitle={`${published.length} live ${published.length === 1 ? "item" : "items"}`}
+          items={published}
+        />
+      )}
     </div>
+  );
+}
+
+function Section({
+  title,
+  subtitle,
+  items,
+}: {
+  title: string;
+  subtitle: string;
+  items: AnnouncementLean[];
+}) {
+  return (
+    <section>
+      <div className="flex items-baseline justify-between mb-4">
+        <div>
+          <h2 className="h-display text-[18px] tracking-tighter">{title}</h2>
+          <p className="text-[11.5px] font-mono text-ink-3 mt-0.5">
+            {subtitle}
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-rule bg-white overflow-hidden">
+        <ul className="divide-y divide-rule">
+          {items.map((item) => (
+            <li key={item._id}>
+              <Link
+                href={`/admin/announcements/${item._id}`}
+                className="flex items-center gap-4 px-5 py-4 hover:bg-tint-1 transition-colors group"
+              >
+                {/* Status dot */}
+                <div
+                  className="w-8 h-8 rounded-full grid place-items-center flex-shrink-0"
+                  style={{
+                    background: item.published ? "#DCFCE7" : "var(--rule)",
+                  }}
+                >
+                  {item.published ? (
+                    <Eye
+                      className="w-3.5 h-3.5"
+                      strokeWidth={2}
+                      style={{ color: "#15803D" }}
+                    />
+                  ) : (
+                    <EyeOff
+                      className="w-3.5 h-3.5 text-ink-3"
+                      strokeWidth={2}
+                    />
+                  )}
+                </div>
+
+                {/* Body */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {item.pinned && (
+                      <Pin
+                        className="w-3 h-3"
+                        strokeWidth={2}
+                        style={{ color: "var(--brand)" }}
+                      />
+                    )}
+                    {item.category && (
+                      <span
+                        className="text-[9.5px] font-mono uppercase tracking-wider"
+                        style={{ color: "var(--brand)" }}
+                      >
+                        {item.category}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[14.5px] font-medium truncate group-hover:text-brand transition-colors">
+                    {item.title || (
+                      <span className="italic text-ink-3">Untitled</span>
+                    )}
+                  </p>
+                  {item.summary && (
+                    <p className="text-[12.5px] text-ink-2 truncate mt-0.5">
+                      {item.summary}
+                    </p>
+                  )}
+                </div>
+
+                {/* Meta */}
+                <div className="text-right flex-shrink-0 hidden sm:block">
+                  <p className="text-[11px] font-mono text-ink-3 flex items-center gap-1 justify-end">
+                    <Calendar className="w-2.5 h-2.5" strokeWidth={2} />
+                    {fmtDate(
+                      item.published
+                        ? item.publishedAt || item.updatedAt
+                        : item.updatedAt || item.createdAt,
+                    )}
+                  </p>
+                </div>
+
+                <Edit
+                  className="w-3.5 h-3.5 text-ink-3 group-hover:text-brand transition-colors flex-shrink-0"
+                  strokeWidth={2}
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }

@@ -111,9 +111,10 @@ export default async function HomePage() {
             </h1>
 
             <p className="fade-in-3 text-[17px] lg:text-[19px] text-ink-2 max-w-xl mx-auto mb-10 leading-relaxed">
-              We design and build websites, SaaS platforms, and the systems
-              beneath them — for teams that need it done by senior engineers,
-              end to end.
+              We build AI-powered SaaS platforms, intelligent software, and
+              secure digital infrastructure that help businesses scale with
+              confidence. Every solution is designed, engineered, and delivered
+              end-to-end by experienced senior engineers.
             </p>
 
             <div className="fade-in-4">
@@ -306,8 +307,6 @@ export default async function HomePage() {
         </section>
       </div>
 
-
-
       {/* ─────────────────────────────────────────
           RECENT PROJECTS
           ───────────────────────────────────────── */}
@@ -343,8 +342,8 @@ export default async function HomePage() {
               eyebrow: "Web & Product",
               desc: "Editorial e-commerce for an artisan beverage brand.",
               client: "Malawi Village",
-              year: 2026,
-              cover: "/placeholder-1.png",
+              year: 2024,
+              cover: "/mw.jpg",
               bg: "#F8F2FB",
             },
             {
@@ -354,7 +353,7 @@ export default async function HomePage() {
               desc: "West Africa's all-in-one digital marketplace.",
               client: "SmileBaba Hub",
               year: 2026,
-              cover: "/placeholder-2.png",
+              cover: "/sbh.jpg",
               bg: "#F4ECFC",
             },
             {
@@ -363,8 +362,8 @@ export default async function HomePage() {
               eyebrow: "Data & ML",
               desc: "Customer analytics and demand forecasting.",
               client: "Black Cowry",
-              year: 2025,
-              cover: "/placeholder-3.png",
+              year: 2026,
+              cover: "/nii.jpg",
               bg: "#EDE3F4",
             },
             {
@@ -447,7 +446,7 @@ export default async function HomePage() {
             in mind?
           </>
         }
-        image="/cta-visual.png"
+        image="/research.avif"
       />
     </>
   );

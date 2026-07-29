@@ -190,7 +190,7 @@ export default async function ProjectsPage() {
               <h2 className="h-display text-[36px] lg:text-[52px] tracking-tightest mb-5 leading-[1.02]">
                 Ready to be the next
                 <br />
-                <span className="italic font-light gradient-text">
+                <span className="font-light gradient-text">
                   case study?
                 </span>
               </h2>
@@ -227,8 +227,9 @@ export default async function ProjectsPage() {
               style={{ background: "#EDE3F4" }}
             >
               <Image
-                src="/cta-visual.png"
+                src="/projects.avif"
                 alt="Software shipped by aeTech"
+                loading="eager"
                 fill
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 className="object-cover lg:object-contain object-center lg:object-[center_120%] scale-110 lg:scale-100 cine-image"
