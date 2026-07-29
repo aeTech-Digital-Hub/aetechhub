@@ -8,6 +8,18 @@ const ProjectSchema = new Schema(
     tagline: String,
     client: String,
     year: Number,
+
+    // Engagement metadata (added)
+    engagementType: {
+      type: String,
+      enum: ["Fixed-fee", "Retainer", "Advisory", "Studio"],
+    },
+    discipline: {
+      type: String,
+      enum: ["Build", "Data", "Secure"],
+    },
+    timeline: String, // free-text label e.g. "8 weeks · Feb–Apr 2025"
+
     services: [String],
     cover: String,
     gallery: [String],
@@ -20,6 +32,15 @@ const ProjectSchema = new Schema(
     liveUrl: String,
     featured: { type: Boolean, default: false },
     published: { type: Boolean, default: true },
+
+    // First-time-publish stamp (added; never cleared on unpublish — it's history)
+    publishedAt: Date,
+
+    // Attribution back to the brief this project originated from (added)
+    convertedFromBriefId: {
+      type: Schema.Types.ObjectId,
+      ref: "Brief",
+    },
   },
   { timestamps: true },
 );

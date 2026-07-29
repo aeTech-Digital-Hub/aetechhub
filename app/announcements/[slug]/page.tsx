@@ -70,7 +70,7 @@ async function getRelated(currentSlug: string): Promise<AnnouncementLean[]> {
       published: true,
       slug: { $ne: currentSlug },
     })
-      .sort({ publishedAt: -1, createdAt: -1 })
+      .sort({ pinned: -1, publishedAt: -1, createdAt: -1 })
       .limit(3)
       .lean<AnnouncementLean[]>();
     return JSON.parse(JSON.stringify(items));
@@ -89,16 +89,22 @@ function fmtDate(d: Date | string | undefined): string {
 }
 
 /**
- * Render the body content. Supports plain text (with paragraph breaks) or
- * simple markdown-like conventions. If your announcements store rich HTML,
- * swap this out for a sanitised HTML renderer.
+ * Markdown-lite body renderer.
+ * Matches EXACTLY what the AnnouncementEditor preview shows, so what admins
+ * write is what visitors read.
+ *
+ * Conventions:
+ *   ## Section heading
+ *   ### Subheading
+ *   - Bullet point (or * Bullet point)
+ *   > Quote or highlight
+ *   (blank line separates blocks)
  */
 function BodyContent({ text }: { text: string }) {
   const blocks = text.split(/\n\n+/).filter((b) => b.trim());
   return (
     <div className="space-y-6">
       {blocks.map((block, i) => {
-        // H2 — line starting with ##
         if (block.startsWith("## ")) {
           return (
             <h2
@@ -109,7 +115,6 @@ function BodyContent({ text }: { text: string }) {
             </h2>
           );
         }
-        // H3 — line starting with ###
         if (block.startsWith("### ")) {
           return (
             <h3
@@ -120,7 +125,6 @@ function BodyContent({ text }: { text: string }) {
             </h3>
           );
         }
-        // Bullet list — lines starting with - or *
         if (/^[-*] /m.test(block)) {
           const items = block
             .split("\n")
@@ -145,7 +149,6 @@ function BodyContent({ text }: { text: string }) {
             </ul>
           );
         }
-        // Blockquote — line starting with >
         if (block.startsWith("> ")) {
           return (
             <blockquote
@@ -157,7 +160,6 @@ function BodyContent({ text }: { text: string }) {
             </blockquote>
           );
         }
-        // Regular paragraph
         return (
           <p
             key={i}
@@ -249,7 +251,7 @@ export default async function AnnouncementDetailPage({
         </div>
       </section>
 
-      {/* Hero image */}
+      {/* Hero image — full-width in max-w-5xl */}
       {item.cover && (
         <section className="container-px pb-10 lg:pb-14 bg-base">
           <div className="max-w-5xl mx-auto">
@@ -341,9 +343,24 @@ export default async function AnnouncementDetailPage({
                     </div>
                   </div>
                   <div className="px-6 pb-6">
-                    <p className="text-[10px] font-mono uppercase tracking-wider text-ink-3 mb-2">
-                      {fmtDate(r.publishedAt || r.createdAt)}
-                    </p>
+                    <div className="flex items-center gap-2 mb-2">
+                      {r.category && (
+                        <span
+                          className="text-[10px] font-mono uppercase tracking-wider"
+                          style={{ color: "var(--brand)" }}
+                        >
+                          {r.category}
+                        </span>
+                      )}
+                      {r.category && (
+                        <span className="text-[10px] font-mono text-ink-3">
+                          ·
+                        </span>
+                      )}
+                      <span className="text-[10px] font-mono text-ink-3">
+                        {fmtDate(r.publishedAt || r.createdAt)}
+                      </span>
+                    </div>
                     <h3 className="h-display text-[17px] tracking-tight leading-tight group-hover:text-brand transition-colors">
                       {r.title}
                     </h3>

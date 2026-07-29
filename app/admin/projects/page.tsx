@@ -1,176 +1,220 @@
-"use client";
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
-import { formatDate } from "@/lib/utils";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { fetchBriefs } from "@/store/slices/dashboardSlice";
+import { redirect } from "next/navigation";
+import { Plus, Star, Eye, EyeOff, Calendar, Edit } from "lucide-react";
+import { dbConnect } from "@/lib/db";
+import { Project } from "@/models/Project";
+import { getCurrentUser } from "@/lib/auth-server";
 
-const STATUSES = [
-  "all",
-  "new",
-  "reviewing",
-  "in-discussion",
-  "quoted",
-  "won",
-  "lost",
-  "archived",
-];
+export const dynamic = "force-dynamic";
 
-export default function BriefsListPage() {
-  const dispatch = useAppDispatch();
-  const { briefs, loading } = useAppSelector((s) => ({
-    briefs: s.dashboard.briefs,
-    loading: s.dashboard.loading.briefs,
-  }));
-  const [filter, setFilter] = useState("all");
-  const [q, setQ] = useState("");
+export const metadata = {
+  title: "Projects",
+  robots: { index: false, follow: false },
+};
 
-  useEffect(() => {
-    dispatch(fetchBriefs());
-  }, [dispatch]);
+type ProjectLean = {
+  _id: string;
+  slug: string;
+  title: string;
+  summary?: string;
+  client?: string;
+  discipline?: string;
+  featured?: boolean;
+  published?: boolean;
+  publishedAt?: Date;
+  updatedAt?: Date;
+  createdAt?: Date;
+};
 
-  const filtered = briefs.filter((b: any) => {
-    if (filter !== "all" && b.status !== filter) return false;
-    if (
-      q &&
-      !`${b.name} ${b.email} ${b.company || ""}`
-        .toLowerCase()
-        .includes(q.toLowerCase())
-    )
-      return false;
-    return true;
+async function getAll(): Promise<ProjectLean[]> {
+  try {
+    await dbConnect();
+    const items = await Project.find({})
+      .sort({ featured: -1, publishedAt: -1, updatedAt: -1, createdAt: -1 })
+      .limit(500)
+      .lean<ProjectLean[]>();
+    return JSON.parse(JSON.stringify(items));
+  } catch (err) {
+    console.error("[admin/projects] fetch failed:", err);
+    return [];
+  }
+}
+
+function fmtDate(d: Date | string | undefined): string {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
+}
+
+export default async function AdminProjectsPage() {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") redirect("/sign-in?next=/admin/projects");
+
+  const items = await getAll();
+  const drafts = items.filter((a) => !a.published);
+  const published = items.filter((a) => a.published);
 
   return (
     <div className="space-y-8">
-      <div className="flex items-end justify-between">
+      <div className="flex items-baseline justify-between">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-wider text-purple-700 mb-2">
-            — Briefs
-          </p>
-          <h1 className="h-display text-4xl">Project requests</h1>
-          <p className="text-sm text-ink/60 mt-2">
-            {briefs.length} total ·{" "}
-            {briefs.filter((b: any) => b.status === "new").length} new
+          <h1 className="h-display text-[28px] tracking-tighter mb-2">
+            Projects
+          </h1>
+          <p className="text-[13.5px] text-ink-2 max-w-2xl leading-relaxed">
+            Case studies. Drafts stay private; publishing makes a project
+            visible on <span className="font-mono text-[12px]">/projects</span>.
           </p>
         </div>
+        <Link href="/admin/projects/new" className="btn-primary !py-2 !text-xs">
+          <Plus className="w-3.5 h-3.5" strokeWidth={2} /> New project
+        </Link>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border border-rule bg-bone p-3">
-        <div className="flex-1 flex items-center gap-2 px-3">
-          <Search className="w-4 h-4 text-ink/40" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name, email, company…"
-            className="flex-1 bg-transparent py-2 text-sm focus:outline-none"
-          />
+      {items.length === 0 && (
+        <div className="text-center py-16 rounded-xl border border-rule bg-tint-1">
+          <p className="text-[13.5px] text-ink-3 italic mb-4">
+            No projects yet.
+          </p>
+          <Link
+            href="/admin/projects/new"
+            className="btn-primary !py-2 !text-xs inline-flex"
+          >
+            <Plus className="w-3.5 h-3.5" strokeWidth={2} /> Add your first
+          </Link>
         </div>
-        <div className="flex gap-1 flex-wrap">
-          {STATUSES.map((s) => (
-            <button
-              key={s}
-              onClick={() => setFilter(s)}
-              className={`px-3 py-1.5 rounded-full text-xs uppercase tracking-wider ${filter === s ? "bg-ink text-bone" : "text-ink/60 hover:bg-rule"}`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
 
-      <div className="border border-rule bg-bone overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-cream border-b border-rule">
-            <tr className="text-left">
-              <Th>Client</Th>
-              <Th>Project</Th>
-              <Th>Budget</Th>
-              <Th>Status</Th>
-              <Th>Received</Th>
-              <Th></Th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-rule">
-            {loading && (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-ink/50">
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {!loading && filtered.length === 0 && (
-              <tr>
-                <td colSpan={6} className="p-8 text-center text-ink/50 italic">
-                  No briefs match.
-                </td>
-              </tr>
-            )}
-            {filtered.map((b: any) => (
-              <tr key={b._id} className="hover:bg-cream/50">
-                <Td>
-                  <div className="font-medium">{b.name}</div>
-                  <div className="text-xs text-ink/50">
-                    {b.email}
-                    {b.company ? ` · ${b.company}` : ""}
-                  </div>
-                </Td>
-                <Td>
-                  <div className="text-sm">{b.projectType || "—"}</div>
-                  <div className="text-xs text-ink/50">
-                    {(b.services || []).slice(0, 2).join(", ")}
-                  </div>
-                </Td>
-                <Td className="text-xs">{b.budget || "—"}</Td>
-                <Td>
-                  <StatusPill s={b.status} />
-                </Td>
-                <Td className="text-xs text-ink/60">
-                  {formatDate(b.createdAt)}
-                </Td>
-                <Td>
-                  <Link
-                    href={`/admin/projects/${b._id}`}
-                    className="text-purple-700 hover:underline text-xs"
-                  >
-                    View →
-                  </Link>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {drafts.length > 0 && (
+        <Section
+          title="Drafts"
+          subtitle={`${drafts.length} unpublished ${drafts.length === 1 ? "item" : "items"}`}
+          items={drafts}
+        />
+      )}
+
+      {published.length > 0 && (
+        <Section
+          title="Published"
+          subtitle={`${published.length} live ${published.length === 1 ? "item" : "items"}`}
+          items={published}
+        />
+      )}
     </div>
   );
 }
 
-function Th({ children }: { children?: React.ReactNode }) {
+function Section({
+  title,
+  subtitle,
+  items,
+}: {
+  title: string;
+  subtitle: string;
+  items: ProjectLean[];
+}) {
   return (
-    <th className="px-4 py-3 text-[11px] uppercase tracking-wider text-ink/50 font-medium">
-      {children}
-    </th>
-  );
-}
-function Td({ children, className = "" }: any) {
-  return <td className={`px-4 py-3 ${className}`}>{children}</td>;
-}
-function StatusPill({ s }: { s: string }) {
-  const colors: Record<string, string> = {
-    new: "bg-purple-100 text-purple-800",
-    reviewing: "bg-blue-100 text-blue-800",
-    "in-discussion": "bg-yellow-100 text-yellow-800",
-    quoted: "bg-amber-100 text-amber-800",
-    won: "bg-green-100 text-green-800",
-    lost: "bg-gray-100 text-gray-700",
-    archived: "bg-gray-50 text-gray-500",
-  };
-  return (
-    <span
-      className={`text-[10px] uppercase tracking-wider px-2 py-1 rounded-full ${colors[s] || "bg-gray-100"}`}
-    >
-      {s}
-    </span>
+    <section>
+      <div className="flex items-baseline justify-between mb-4">
+        <div>
+          <h2 className="h-display text-[18px] tracking-tighter">{title}</h2>
+          <p className="text-[11.5px] font-mono text-ink-3 mt-0.5">
+            {subtitle}
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-rule bg-white overflow-hidden">
+        <ul className="divide-y divide-rule">
+          {items.map((item) => (
+            <li key={item._id}>
+              <Link
+                href={`/admin/projects/${item._id}`}
+                className="flex items-center gap-4 px-5 py-4 hover:bg-tint-1 transition-colors group"
+              >
+                <div
+                  className="w-8 h-8 rounded-full grid place-items-center flex-shrink-0"
+                  style={{
+                    background: item.published ? "#DCFCE7" : "var(--rule)",
+                  }}
+                >
+                  {item.published ? (
+                    <Eye
+                      className="w-3.5 h-3.5"
+                      strokeWidth={2}
+                      style={{ color: "#15803D" }}
+                    />
+                  ) : (
+                    <EyeOff
+                      className="w-3.5 h-3.5 text-ink-3"
+                      strokeWidth={2}
+                    />
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {item.featured && (
+                      <Star
+                        className="w-3 h-3"
+                        strokeWidth={2}
+                        style={{ color: "var(--brand)" }}
+                      />
+                    )}
+                    {item.discipline && (
+                      <span
+                        className="text-[9.5px] font-mono uppercase tracking-wider"
+                        style={{ color: "var(--brand)" }}
+                      >
+                        {item.discipline}
+                      </span>
+                    )}
+                    {item.client && (
+                      <>
+                        <span className="text-[9.5px] font-mono text-ink-3">
+                          ·
+                        </span>
+                        <span className="text-[10.5px] text-ink-2 truncate">
+                          {item.client}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-[14.5px] font-medium truncate group-hover:text-brand transition-colors">
+                    {item.title || (
+                      <span className="italic text-ink-3">Untitled</span>
+                    )}
+                  </p>
+                  {item.summary && (
+                    <p className="text-[12.5px] text-ink-2 truncate mt-0.5">
+                      {item.summary}
+                    </p>
+                  )}
+                </div>
+
+                <div className="text-right flex-shrink-0 hidden sm:block">
+                  <p className="text-[11px] font-mono text-ink-3 flex items-center gap-1 justify-end">
+                    <Calendar className="w-2.5 h-2.5" strokeWidth={2} />
+                    {fmtDate(
+                      item.published
+                        ? item.publishedAt || item.updatedAt
+                        : item.updatedAt || item.createdAt,
+                    )}
+                  </p>
+                </div>
+
+                <Edit
+                  className="w-3.5 h-3.5 text-ink-3 group-hover:text-brand transition-colors flex-shrink-0"
+                  strokeWidth={2}
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }

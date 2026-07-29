@@ -1,29 +1,84 @@
 import Link from "next/link";
 import Image from "next/image";
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import {
-  ArrowUpRight,
-  ArrowRight,
   ArrowLeft,
+  ArrowUpRight,
   ExternalLink,
+  Calendar,
+  Layers,
 } from "lucide-react";
 import { dbConnect } from "@/lib/db";
 import { Project } from "@/models/Project";
-import { SERVICES } from "@/lib/services";
 import { Reveal, StaggerReveal, StaggerItem } from "@/components/motion/Reveal";
-import { SpotlightCard } from "@/components/motion/SpotlightCard";
-import { CaseStudyJsonLd, BreadcrumbJsonLd } from "@/components/seo/JsonLd";
+import { BreadcrumbJsonLd } from "@/components/seo/JsonLd";
 
-export const revalidate = 3600;
+export const revalidate = 300;
 
-export async function generateStaticParams() {
+type Metric = { label: string; value: string };
+type ProjectLean = {
+  _id: string;
+  slug: string;
+  title: string;
+  tagline?: string;
+  summary?: string;
+  client?: string;
+  year?: number;
+  timeline?: string;
+  engagementType?: string;
+  discipline?: string;
+  services?: string[];
+  techStack?: string[];
+  cover?: string;
+  gallery?: string[];
+  challenge?: string;
+  approach?: string;
+  outcome?: string;
+  metrics?: Metric[];
+  liveUrl?: string;
+  featured?: boolean;
+  published?: boolean;
+  publishedAt?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+};
+
+/**
+ * Defensive query — uses `$ne: false` so legacy projects that were saved
+ * before the `published` field existed (undefined) still render.
+ * Logs on miss so 404s are diagnosable from server logs.
+ */
+async function getProject(slug: string): Promise<ProjectLean | null> {
   try {
     await dbConnect();
-    const projects = await Project.find({ published: true })
-      .select("slug")
-      .lean<any[]>();
-    return projects.map((p) => ({ slug: p.slug }));
+    const doc = await Project.findOne({
+      slug,
+      published: { $ne: false },
+    }).lean<ProjectLean>();
+
+    if (!doc) {
+      console.warn(
+        `[project/${slug}] not found — check slug spelling, case, or published=false state`,
+      );
+    }
+    return doc ? JSON.parse(JSON.stringify(doc)) : null;
+  } catch (err) {
+    console.error(`[project/${slug}] query failed:`, err);
+    return null;
+  }
+}
+
+async function getRelated(currentSlug: string): Promise<ProjectLean[]> {
+  try {
+    await dbConnect();
+    const items = await Project.find({
+      slug: { $ne: currentSlug },
+      published: { $ne: false },
+    })
+      .sort({ featured: -1, publishedAt: -1, createdAt: -1 })
+      .limit(3)
+      .lean<ProjectLean[]>();
+    return JSON.parse(JSON.stringify(items));
   } catch {
     return [];
   }
@@ -33,456 +88,569 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
+}) {
   const { slug } = await params;
-  try {
-    await dbConnect();
-    const p: any = await Project.findOne({ slug, published: true }).lean();
-    if (!p) return { title: "Project not found" };
-    const title = `${p.title}${p.client ? ` for ${p.client}` : ""}`;
-    const description =
+  const p = await getProject(slug);
+  if (!p) return { title: "Project not found" };
+  return {
+    title: p.title,
+    description:
       p.tagline ||
-      p.summary?.slice(0, 160) ||
-      `${p.title} — a project by aeTech Digital Hub.`;
-    return {
-      title,
-      description,
-      alternates: { canonical: `/projects/${slug}` },
-      openGraph: {
-        title,
-        description,
-        type: "article",
-        url: `/projects/${slug}`,
-        images: p.cover
-          ? [{ url: p.cover, width: 1200, height: 630, alt: p.title }]
-          : undefined,
-      },
-    };
-  } catch {
-    return { title: "Project" };
-  }
+      p.summary ||
+      `Case study from aeTech Digital Hub — ${p.title}`,
+    alternates: { canonical: `/projects/${slug}` },
+    openGraph: {
+      title: p.title,
+      description: p.tagline || p.summary,
+      images: p.cover ? [{ url: p.cover }] : undefined,
+      type: "article",
+      publishedTime: p.publishedAt
+        ? new Date(p.publishedAt).toISOString()
+        : undefined,
+    },
+  };
 }
 
-export default async function ProjectDetail({
+function ProseSection({
+  eyebrow,
+  title,
+  text,
+}: {
+  eyebrow: string;
+  title: string;
+  text?: string;
+}) {
+  if (!text?.trim()) return null;
+  const blocks = text.split(/\n\n+/).filter((b) => b.trim());
+
+  return (
+    <section className="container-px pb-14 lg:pb-20 bg-base">
+      <div className="max-w-3xl mx-auto">
+        <Reveal>
+          <p className="eyebrow mb-3">{eyebrow}</p>
+          <h2 className="h-display text-[28px] lg:text-[36px] tracking-tighter mb-8 leading-[1.1]">
+            {title}
+          </h2>
+          <div className="space-y-6">
+            {blocks.map((block, i) => {
+              if (block.startsWith("## ")) {
+                return (
+                  <h3
+                    key={i}
+                    className="h-display text-[22px] lg:text-[26px] tracking-tighter mt-8 mb-1"
+                  >
+                    {block.slice(3)}
+                  </h3>
+                );
+              }
+              if (block.startsWith("### ")) {
+                return (
+                  <h4
+                    key={i}
+                    className="h-display text-[18px] lg:text-[20px] tracking-tight mt-6 mb-1"
+                  >
+                    {block.slice(4)}
+                  </h4>
+                );
+              }
+              if (/^[-*] /m.test(block)) {
+                const items = block
+                  .split("\n")
+                  .filter((l) => /^[-*] /.test(l))
+                  .map((l) => l.replace(/^[-*] /, ""));
+                return (
+                  <ul key={i} className="space-y-2 pl-1">
+                    {items.map((it, j) => (
+                      <li
+                        key={j}
+                        className="flex gap-3 text-[15.5px] lg:text-[16.5px] text-ink-2 leading-relaxed"
+                      >
+                        <span
+                          style={{ color: "var(--brand)" }}
+                          className="font-bold flex-shrink-0"
+                        >
+                          ·
+                        </span>
+                        <span>{it}</span>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              }
+              if (block.startsWith("> ")) {
+                return (
+                  <blockquote
+                    key={i}
+                    className="border-l-2 pl-5 py-1 italic text-[16px] lg:text-[17px] text-ink-2"
+                    style={{ borderColor: "var(--brand)" }}
+                  >
+                    {block.slice(2)}
+                  </blockquote>
+                );
+              }
+              return (
+                <p
+                  key={i}
+                  className="text-[15.5px] lg:text-[16.5px] text-ink-2 leading-relaxed"
+                >
+                  {block}
+                </p>
+              );
+            })}
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+export default async function ProjectDetailPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  await dbConnect();
-  const p: any = await Project.findOne({ slug, published: true }).lean();
-  if (!p) return notFound();
+  const [project, related] = await Promise.all([
+    getProject(slug),
+    getRelated(slug),
+  ]);
 
-  // Map service slug → name
-  const tagFor = (slug: string) => {
-    const s = SERVICES.find((x) => x.slug === slug);
-    return s ? s.name : slug.replace(/-/g, " ");
-  };
+  if (!project) notFound();
 
-  // Find the next published project for footer navigation
-  const others: any[] = await Project.find({
-    published: true,
-    slug: { $ne: slug },
-  })
-    .sort({ year: -1 })
-    .limit(1)
-    .lean();
-  const nextProject = others[0];
+  const hasEngagementMeta =
+    project.client ||
+    project.year ||
+    project.timeline ||
+    project.engagementType ||
+    project.discipline;
 
   return (
     <>
-      <CaseStudyJsonLd
-        title={p.title}
-        description={p.tagline || p.summary || ""}
-        slug={slug}
-        client={p.client}
-        year={p.year}
-        image={p.cover}
-      />
       <BreadcrumbJsonLd
-        trail={[
+        items={[
           { name: "Home", href: "/" },
-          { name: "Work", href: "/projects" },
-          { name: p.title, href: `/projects/${slug}` },
+          { name: "Projects", href: "/projects" },
+          { name: project.title, href: `/projects/${slug}` },
         ]}
       />
 
-      {/* ─────────────────────────────────────────
-          BACK LINK + HEADER
-          ───────────────────────────────────────── */}
-      <section className="container-px pt-24 pb-12 lg:pt-32 lg:pb-16 bg-base">
-        <div className="max-w-5xl mx-auto">
+      {/* HEADER */}
+      <section className="container-px pt-28 pb-6 lg:pt-36 lg:pb-8 bg-base">
+        <div className="max-w-4xl mx-auto">
           <Reveal>
             <Link
               href="/projects"
-              className="inline-flex items-center gap-1.5 text-[13px] text-ink-2 hover:text-ink mb-12 transition-colors"
+              className="inline-flex items-center gap-1.5 text-[13px] text-ink-2 hover:text-ink mb-10 transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" strokeWidth={2} />
-              All work
+              All projects
             </Link>
 
-            {/* Year + client + service tags */}
-            <div className="flex items-center gap-3 flex-wrap mb-8 text-[12px] font-mono">
-              {p.year && (
-                <span style={{ color: "var(--brand)" }}>{p.year}</span>
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              {project.discipline && (
+                <span
+                  className="text-[10.5px] font-mono uppercase tracking-wider px-2 py-1 rounded"
+                  style={{
+                    background: "var(--brand-100)",
+                    color: "var(--brand)",
+                  }}
+                >
+                  {project.discipline}
+                </span>
               )}
-              {p.client && (
-                <>
-                  <span className="text-ink-3 opacity-40">·</span>
-                  <span className="text-ink-2">{p.client}</span>
-                </>
+              {project.client && (
+                <span className="text-[11px] font-mono text-ink-3">
+                  {project.client}
+                </span>
               )}
-              {p.services?.length > 0 && (
-                <>
-                  <span className="text-ink-3 opacity-40">·</span>
-                  <span className="text-ink-2 capitalize">
-                    {p.services.slice(0, 2).map(tagFor).join(" / ")}
-                  </span>
-                </>
+              {(project.timeline || project.year) && (
+                <span className="text-[11px] font-mono text-ink-3 flex items-center gap-1">
+                  <Calendar className="w-3 h-3" strokeWidth={2} />
+                  {project.timeline || project.year}
+                </span>
+              )}
+              {project.engagementType && (
+                <span className="text-[11px] font-mono text-ink-3">
+                  · {project.engagementType}
+                </span>
               )}
             </div>
 
-            {/* Title */}
-            <h1 className="h-display text-[44px] sm:text-[60px] lg:text-[80px] tracking-tightest mb-7 leading-[0.98]">
-              {p.title}
+            <h1 className="h-display text-[40px] sm:text-[52px] lg:text-[68px] tracking-tightest leading-[0.98] mb-5">
+              {project.title}
             </h1>
 
-            {/* Tagline */}
-            {p.tagline && (
-              <p className="text-[18px] lg:text-[22px] text-ink-2 max-w-3xl leading-relaxed font-light">
-                {p.tagline}
+            {project.tagline && (
+              <p
+                className="text-[19px] lg:text-[24px] font-light mb-6 max-w-2xl leading-tight"
+                style={{ color: "var(--brand)" }}
+              >
+                {project.tagline}
               </p>
             )}
 
-            {/* Live link */}
-            {p.liveUrl && (
-              <a
-                href={p.liveUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 mt-8 text-[14px] text-ink hover:text-brand transition-colors"
-              >
-                Visit live site
-                <ExternalLink className="w-3.5 h-3.5" strokeWidth={2} />
-              </a>
+            {project.summary && (
+              <p className="text-[16px] lg:text-[18px] text-ink-2 leading-relaxed max-w-2xl">
+                {project.summary}
+              </p>
+            )}
+
+            {project.liveUrl && (
+              <div className="mt-8">
+                <a
+                  href={project.liveUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary inline-flex !py-2.5 !text-sm"
+                >
+                  Visit live site
+                  <ExternalLink className="w-3.5 h-3.5" strokeWidth={2} />
+                </a>
+              </div>
             )}
           </Reveal>
         </div>
       </section>
 
-      {/* ─────────────────────────────────────────
-          HERO IMAGE — large mockup in tinted card
-          ───────────────────────────────────────── */}
-      {p.cover && (
-        <section className="container-px pb-16 lg:pb-24 bg-base">
-          <div className="max-w-7xl mx-auto">
+      {/* HERO IMAGE */}
+      {project.cover && (
+        <section className="container-px pb-12 lg:pb-16 bg-base">
+          <div className="max-w-6xl mx-auto">
             <Reveal>
               <div
-                className="rounded-3xl overflow-hidden p-6 lg:p-12"
-                style={{ background: "#F8F2FB" }}
+                className="aspect-[16/9] rounded-2xl overflow-hidden relative"
+                style={{ background: "var(--brand-50)" }}
               >
-                <div className="aspect-[16/10] relative rounded-2xl overflow-hidden">
-                  <Image
-                    src={p.cover}
-                    alt={p.title}
-                    fill
-                    sizes="(max-width: 1280px) 100vw, 1280px"
-                    className="object-cover"
-                    priority
-                  />
-                </div>
+                <Image
+                  src={project.cover}
+                  alt={project.title}
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 1200px"
+                  className="object-cover"
+                  priority
+                />
               </div>
             </Reveal>
           </div>
         </section>
       )}
 
-      {/* ─────────────────────────────────────────
-          OVERVIEW — Summary on left, Facts on right
-          ───────────────────────────────────────── */}
-      <section className="container-px py-20 lg:py-28 bg-base border-t border-rule">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid lg:grid-cols-12 gap-12 lg:gap-20">
-            {/* Left: summary */}
-            <div className="lg:col-span-7">
-              <Reveal>
-                <p className="eyebrow mb-5">Overview</p>
-                <p className="text-[18px] lg:text-[20px] text-ink leading-relaxed">
-                  {p.summary || p.tagline}
-                </p>
-              </Reveal>
-            </div>
-
-            {/* Right: facts */}
-            <div className="lg:col-span-5">
-              <Reveal delay={0.1}>
-                <dl className="space-y-5">
-                  {p.year && <FactRow label="Year" value={String(p.year)} />}
-                  {p.client && <FactRow label="Client" value={p.client} />}
-                  {p.services?.length > 0 && (
-                    <FactRow
-                      label="Services"
-                      value={p.services.map(tagFor).join(", ")}
-                    />
-                  )}
-                  {p.techStack?.length > 0 && (
-                    <FactRow
-                      label="Stack"
-                      value={p.techStack.slice(0, 6).join(" · ")}
-                    />
-                  )}
-                </dl>
-              </Reveal>
-            </div>
+      {/* ENGAGEMENT META STRIP */}
+      {hasEngagementMeta && (
+        <section className="container-px pb-14 lg:pb-20 bg-base">
+          <div className="max-w-4xl mx-auto">
+            <Reveal>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 py-8 border-y border-rule">
+                {project.client && (
+                  <MetaItem label="Client" value={project.client} />
+                )}
+                {(project.timeline || project.year) && (
+                  <MetaItem
+                    label="Timeline"
+                    value={project.timeline || String(project.year)}
+                  />
+                )}
+                {project.engagementType && (
+                  <MetaItem label="Engagement" value={project.engagementType} />
+                )}
+                {project.discipline && (
+                  <MetaItem label="Discipline" value={project.discipline} />
+                )}
+              </div>
+            </Reveal>
           </div>
+        </section>
+      )}
+
+      {/* CHALLENGE */}
+      <ProseSection
+        eyebrow="The challenge"
+        title="What we set out to solve."
+        text={project.challenge}
+      />
+
+      {/* APPROACH */}
+      <ProseSection
+        eyebrow="Our approach"
+        title="How we thought about it."
+        text={project.approach}
+      />
+
+      {/* METRICS */}
+      {project.metrics && project.metrics.length > 0 && (
+        <section className="container-px py-14 lg:py-20 bg-tint-1 border-y border-rule">
+          <div className="max-w-6xl mx-auto">
+            <Reveal>
+              <div className="text-center mb-10">
+                <p className="eyebrow mb-3">By the numbers</p>
+                <h2 className="h-display text-[26px] lg:text-[36px] tracking-tighter">
+                  Outcomes, measured.
+                </h2>
+              </div>
+            </Reveal>
+
+            <StaggerReveal
+              className={`grid gap-6 ${
+                project.metrics.length === 2
+                  ? "sm:grid-cols-2 max-w-3xl mx-auto"
+                  : project.metrics.length === 3
+                    ? "sm:grid-cols-3"
+                    : "sm:grid-cols-2 lg:grid-cols-4"
+              }`}
+            >
+              {project.metrics.map((m, i) => (
+                <StaggerItem key={i}>
+                  <div className="text-center px-4 py-8 rounded-2xl border border-rule bg-white h-full">
+                    <p
+                      className="h-display text-[36px] lg:text-[48px] tracking-tighter leading-none mb-2"
+                      style={{ color: "var(--brand)" }}
+                    >
+                      {m.value}
+                    </p>
+                    <p className="text-[12px] font-mono uppercase tracking-wider text-ink-3">
+                      {m.label}
+                    </p>
+                  </div>
+                </StaggerItem>
+              ))}
+            </StaggerReveal>
+          </div>
+        </section>
+      )}
+
+      {/* OUTCOME */}
+      <ProseSection
+        eyebrow="The outcome"
+        title="What shipped."
+        text={project.outcome}
+      />
+
+      {/* GALLERY */}
+      {project.gallery && project.gallery.length > 0 && (
+        <section className="container-px pb-16 lg:pb-24 bg-base">
+          <div className="max-w-6xl mx-auto">
+            <Reveal>
+              <div className="mb-8">
+                <p className="eyebrow mb-3">In the making</p>
+                <h2 className="h-display text-[24px] lg:text-[30px] tracking-tighter">
+                  Selected screens.
+                </h2>
+              </div>
+            </Reveal>
+
+            <StaggerReveal className="grid sm:grid-cols-2 gap-5 lg:gap-6">
+              {project.gallery.map((url, i) => (
+                <StaggerItem key={`${url}-${i}`}>
+                  <div
+                    className="aspect-[4/3] rounded-2xl overflow-hidden relative border border-rule"
+                    style={{ background: "var(--brand-50)" }}
+                  >
+                    <Image
+                      src={url}
+                      alt={`${project.title} — ${i + 1}`}
+                      fill
+                      sizes="(max-width: 640px) 100vw, 50vw"
+                      className="object-cover"
+                    />
+                  </div>
+                </StaggerItem>
+              ))}
+            </StaggerReveal>
+          </div>
+        </section>
+      )}
+
+      {/* TECH STACK + SERVICES */}
+      {((project.techStack && project.techStack.length > 0) ||
+        (project.services && project.services.length > 0)) && (
+        <section className="container-px pb-16 lg:pb-24 bg-base">
+          <div className="max-w-4xl mx-auto">
+            <Reveal>
+              <div className="rounded-2xl border border-rule bg-white p-6 lg:p-8">
+                <div className="flex items-center gap-2 mb-5">
+                  <Layers
+                    className="w-3.5 h-3.5"
+                    strokeWidth={2}
+                    style={{ color: "var(--brand)" }}
+                  />
+                  <p className="eyebrow" style={{ color: "var(--brand)" }}>
+                    What we used
+                  </p>
+                </div>
+
+                {project.services && project.services.length > 0 && (
+                  <div className="mb-6">
+                    <p className="text-[11px] font-mono uppercase tracking-wider text-ink-3 mb-3">
+                      Services
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {project.services.map((s) => (
+                        <span
+                          key={s}
+                          className="text-[12.5px] px-3 py-1 rounded-md"
+                          style={{
+                            background: "var(--brand-100)",
+                            color: "var(--brand)",
+                          }}
+                        >
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {project.techStack && project.techStack.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-mono uppercase tracking-wider text-ink-3 mb-3">
+                      Stack
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {project.techStack.map((t) => (
+                        <span
+                          key={t}
+                          className="text-[12.5px] px-3 py-1 rounded-md bg-tint-1 border border-rule text-ink"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Reveal>
+          </div>
+        </section>
+      )}
+
+      {/* CTA */}
+      <section className="container-px py-20 lg:py-28 bg-tint-1 border-y border-rule">
+        <div className="max-w-3xl mx-auto text-center">
+          <Reveal>
+            <p className="eyebrow mb-4">Working on something similar?</p>
+            <h2 className="h-display text-[32px] lg:text-[44px] tracking-tighter mb-6 leading-tight">
+              Let&apos;s talk about your{" "}
+              <span className="italic font-light gradient-text">project.</span>
+            </h2>
+            <div className="flex flex-wrap justify-center gap-3">
+              <Link href="/start-project" className="btn-primary">
+                Start a project
+                <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} />
+              </Link>
+              <Link href="/book" className="btn-ghost">
+                Book a call
+              </Link>
+            </div>
+          </Reveal>
         </div>
       </section>
 
-      {/* ─────────────────────────────────────────
-          CHALLENGE — tinted section
-          ───────────────────────────────────────── */}
-      {p.challenge && (
-        <section className="container-px py-24 lg:py-32 bg-tint-1 border-t border-rule">
-          <div className="max-w-7xl mx-auto">
-            <div className="grid lg:grid-cols-12 gap-10 lg:gap-16">
-              <div className="lg:col-span-4">
-                <Reveal>
-                  <p className="eyebrow mb-4">Challenge</p>
-                  <h2 className="h-display text-[28px] lg:text-[36px] tracking-tighter">
-                    What we walked into.
-                  </h2>
-                </Reveal>
-              </div>
-              <div className="lg:col-span-8">
-                <Reveal delay={0.1}>
-                  <p className="text-[17px] lg:text-[19px] text-ink leading-relaxed whitespace-pre-line">
-                    {p.challenge}
-                  </p>
-                </Reveal>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ─────────────────────────────────────────
-          APPROACH — base bg, alternating
-          ───────────────────────────────────────── */}
-      {p.approach && (
-        <section className="container-px py-24 lg:py-32 bg-base border-t border-rule">
-          <div className="max-w-7xl mx-auto">
-            <div className="grid lg:grid-cols-12 gap-10 lg:gap-16">
-              <div className="lg:col-span-4">
-                <Reveal>
-                  <p className="eyebrow mb-4">Approach</p>
-                  <h2 className="h-display text-[28px] lg:text-[36px] tracking-tighter">
-                    What we did.
-                  </h2>
-                </Reveal>
-              </div>
-              <div className="lg:col-span-8">
-                <Reveal delay={0.1}>
-                  <p className="text-[17px] lg:text-[19px] text-ink leading-relaxed whitespace-pre-line">
-                    {p.approach}
-                  </p>
-                </Reveal>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ─────────────────────────────────────────
-          OUTCOME + METRICS — tinted again
-          ───────────────────────────────────────── */}
-      {(p.outcome || p.metrics?.length > 0) && (
-        <section className="container-px py-24 lg:py-32 bg-tint-2 border-t border-rule">
-          <div className="max-w-7xl mx-auto">
+      {/* RELATED */}
+      {related.length > 0 && (
+        <section className="container-px pb-32 lg:pb-40 bg-base">
+          <div className="max-w-6xl mx-auto pt-16 lg:pt-24">
             <Reveal>
-              <p className="eyebrow mb-4">Outcome</p>
-              <h2 className="h-display text-[28px] lg:text-[36px] tracking-tighter mb-10 lg:mb-14">
-                What we shipped.
-              </h2>
+              <div className="flex items-baseline justify-between mb-8">
+                <div>
+                  <p className="eyebrow mb-3">More work</p>
+                  <h2 className="h-display text-[24px] lg:text-[30px] tracking-tighter">
+                    Related case studies.
+                  </h2>
+                </div>
+                <Link
+                  href="/projects"
+                  className="text-[13px] link-brand inline-flex items-center gap-1.5"
+                >
+                  All projects
+                  <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} />
+                </Link>
+              </div>
             </Reveal>
 
-            {p.outcome && (
-              <Reveal delay={0.1}>
-                <p className="text-[17px] lg:text-[19px] text-ink leading-relaxed whitespace-pre-line max-w-3xl mb-12 lg:mb-16">
-                  {p.outcome}
-                </p>
-              </Reveal>
-            )}
-
-            {p.metrics?.length > 0 && (
-              <StaggerReveal className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
-                {p.metrics.map(
-                  (m: { label: string; value: string }, i: number) => (
-                    <StaggerItem key={i}>
-                      <div className="bg-white rounded-2xl border border-rule p-6 lg:p-8 h-full">
-                        <p
-                          className="h-display text-[36px] lg:text-[44px] tracking-tighter mb-2 leading-none"
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 lg:gap-6">
+              {related.map((r) => (
+                <Link
+                  key={r._id}
+                  href={`/projects/${r.slug}`}
+                  className="group block border border-rule rounded-2xl bg-white lift overflow-hidden"
+                >
+                  <div className="p-4">
+                    <div
+                      className="aspect-[4/3] rounded-xl relative overflow-hidden"
+                      style={{
+                        background:
+                          "linear-gradient(135deg, var(--brand-50) 0%, var(--brand-100) 100%)",
+                      }}
+                    >
+                      {r.cover ? (
+                        <Image
+                          src={r.cover}
+                          alt={r.title}
+                          fill
+                          sizes="(max-width: 640px) 100vw, 33vw"
+                          className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 grid place-items-center">
+                          <span
+                            className="h-display text-5xl float-slow opacity-30"
+                            style={{ color: "var(--brand)" }}
+                          >
+                            {r.discipline?.charAt(0)?.toUpperCase() || "P"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="px-6 pb-6">
+                    <div className="flex items-center gap-2 mb-2">
+                      {r.discipline && (
+                        <span
+                          className="text-[10px] font-mono uppercase tracking-wider"
                           style={{ color: "var(--brand)" }}
                         >
-                          {m.value}
-                        </p>
-                        <p className="text-[13px] text-ink-2 leading-snug">
-                          {m.label}
-                        </p>
-                      </div>
-                    </StaggerItem>
-                  ),
-                )}
-              </StaggerReveal>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* ─────────────────────────────────────────
-          TECH STACK
-          ───────────────────────────────────────── */}
-      {p.techStack?.length > 0 && (
-        <section className="container-px py-20 lg:py-24 bg-base border-t border-rule">
-          <div className="max-w-7xl mx-auto">
-            <Reveal>
-              <p className="eyebrow mb-6">Built with</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                {p.techStack.map((t: string) => (
-                  <span
-                    key={t}
-                    className="px-3.5 py-1.5 rounded-full bg-white border border-rule text-[13px] font-mono text-ink-2"
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </Reveal>
-          </div>
-        </section>
-      )}
-
-      {/* ─────────────────────────────────────────
-          NEXT PROJECT
-          ───────────────────────────────────────── */}
-      {nextProject && (
-        <section className="container-px py-20 lg:py-28 bg-base border-t border-rule">
-          <div className="max-w-7xl mx-auto">
-            <Reveal>
-              <Link
-                href={`/projects/${nextProject.slug}`}
-                className="group block rounded-3xl border border-rule overflow-hidden lift"
-                style={{ background: "#F8F2FB" }}
-              >
-                <div className="grid lg:grid-cols-2 items-center">
-                  <div className="px-8 sm:px-12 lg:px-16 py-12 lg:py-16">
-                    <p className="eyebrow mb-4">Next project</p>
-                    <h3 className="h-display text-[28px] lg:text-[36px] tracking-tighter mb-3">
-                      {nextProject.title}
+                          {r.discipline}
+                        </span>
+                      )}
+                      {r.client && (
+                        <>
+                          <span className="text-[10px] font-mono text-ink-3">
+                            ·
+                          </span>
+                          <span className="text-[10px] font-mono text-ink-3">
+                            {r.client}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <h3 className="h-display text-[17px] tracking-tight leading-tight mb-1 group-hover:text-brand transition-colors">
+                      {r.title}
                     </h3>
-                    {nextProject.tagline && (
-                      <p className="text-[15px] text-ink-2 leading-relaxed max-w-md mb-6 line-clamp-2">
-                        {nextProject.tagline}
+                    {r.tagline && (
+                      <p className="text-[12.5px] text-ink-2 italic leading-relaxed line-clamp-2">
+                        {r.tagline}
                       </p>
                     )}
-                    <span className="inline-flex items-center gap-1.5 text-[14px] font-medium text-ink group-hover:text-brand transition-colors">
-                      Read case study
-                      <ArrowUpRight
-                        className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-                        strokeWidth={2}
-                      />
-                    </span>
                   </div>
-                  {nextProject.cover && (
-                    <div className="relative aspect-[16/10] lg:aspect-auto lg:h-full lg:min-h-[320px]">
-                      <Image
-                        src={nextProject.cover}
-                        alt={nextProject.title}
-                        fill
-                        sizes="(max-width: 1024px) 100vw, 50vw"
-                        className="object-cover cine-image"
-                      />
-                    </div>
-                  )}
-                </div>
-              </Link>
-            </Reveal>
+                </Link>
+              ))}
+            </div>
           </div>
         </section>
       )}
-
-      {/* ─────────────────────────────────────────
-          CTA
-          ───────────────────────────────────────── */}
-      <section className="container-px py-24 lg:py-32 bg-base border-t border-rule">
-        <Reveal>
-          <SpotlightCard
-            className="overflow-hidden rounded-3xl border border-rule grid lg:grid-cols-2 max-w-7xl mx-auto"
-            spotlightColor="rgba(45, 13, 80, 0.18)"
-            style={{ background: "#F8F2FB" }}
-          >
-            <div className="px-8 sm:px-12 lg:px-16 py-14 lg:py-20 flex flex-col justify-center order-2 lg:order-1">
-              <p className="eyebrow mb-5">Like what you see?</p>
-              <h2 className="h-display text-[36px] lg:text-[52px] tracking-tightest mb-5 leading-[1.02]">
-                Let&apos;s build
-                <br />
-                <span className=" font-light gradient-text">
-                  yours next.
-                </span>
-              </h2>
-              <p className="text-[16px] lg:text-[17px] text-ink-2 mb-9 leading-relaxed max-w-md">
-                Tell us a little about your project. We&apos;ll come back with a
-                written scope and an honest estimate within 48 hours.
-              </p>
-
-              <div>
-                <Link
-                  href="/start-project"
-                  className="btn-primary lift"
-                  data-track={`project_${slug}_cta`}
-                >
-                  Start a project
-                  <ArrowRight className="w-4 h-4" strokeWidth={2} />
-                </Link>
-              </div>
-
-              <p className="mt-6 text-[13px] text-ink-2">
-                Want to write it down properly?{" "}
-                <Link
-                  href="/brief/guide"
-                  className="text-ink underline decoration-rule underline-offset-4 hover:decoration-ink hover:text-ink transition-colors"
-                  data-track={`project_${slug}_cta_brief`}
-                >
-                  Use the detailed brief
-                </Link>
-              </p>
-            </div>
-
-            <div
-              className="relative min-h-[280px] lg:min-h-0 order-1 lg:order-2 overflow-hidden"
-              style={{ background: "#EDE3F4" }}
-            >
-              <Image
-                src="/p3.avif"
-                alt="Software shipped by aeTech"
-                fill
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                className="object-cover lg:object-contain object-center lg:object-[center_120%] scale-110 lg:scale-100 cine-image"
-              />
-            </div>
-          </SpotlightCard>
-        </Reveal>
-      </section>
     </>
   );
 }
 
-function FactRow({ label, value }: { label: string; value: string }) {
+function MetaItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 pb-4 border-b border-rule">
-      <dt className="text-[12px] font-mono uppercase tracking-wider text-ink-3 flex-shrink-0">
+    <div>
+      <p className="text-[10px] font-mono uppercase tracking-wider text-ink-3 mb-1.5">
         {label}
-      </dt>
-      <dd className="text-[14px] text-ink text-right">{value}</dd>
+      </p>
+      <p className="text-[14px] lg:text-[15px] text-ink font-medium leading-tight">
+        {value}
+      </p>
     </div>
   );
 }
