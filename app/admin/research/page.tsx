@@ -1,82 +1,230 @@
-'use client';
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Plus } from 'lucide-react';
-import { formatDate, slugify } from '@/lib/utils';
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Plus, Eye, EyeOff, Calendar, Edit } from "lucide-react";
+import { dbConnect } from "@/lib/db";
+import { Research } from "@/models";
+import { getCurrentUser } from "@/lib/auth-server";
 
-export default function ResearchAdminPage() {
-  const [items, setItems] = useState<any[]>([]);
-  const [showNew, setShowNew] = useState(false);
-  const [draft, setDraft] = useState({ title: '', slug: '', category: 'research', excerpt: '', body: '', author: '', tags: '', readTime: 5, published: true });
+export const dynamic = "force-dynamic";
 
-  async function load() {
-    const r = await fetch('/api/research?published=0');
-    const d = await r.json();
-    setItems(d.items || []);
+export const metadata = {
+  title: "Research",
+  robots: { index: false, follow: false },
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  research: "Research",
+  engineering: "Software Engineering",
+  design: "Design",
+  business: "Business",
+};
+
+type ArticleLean = {
+  _id: string;
+  slug: string;
+  title: string;
+  excerpt?: string;
+  category?: string;
+  author?: string;
+  readTime?: number;
+  published?: boolean;
+  publishedAt?: Date;
+  updatedAt?: Date;
+  createdAt?: Date;
+};
+
+async function getAll(): Promise<ArticleLean[]> {
+  try {
+    await dbConnect();
+    const items = await Research.find({})
+      .sort({ publishedAt: -1, updatedAt: -1, createdAt: -1 })
+      .limit(500)
+      .lean<ArticleLean[]>();
+    return JSON.parse(JSON.stringify(items));
+  } catch (err) {
+    console.error("[admin/research] fetch failed:", err);
+    return [];
   }
-  useEffect(() => { load(); }, []);
+}
 
-  async function create() {
-    if (!draft.title) return;
-    const payload = {
-      ...draft,
-      slug: draft.slug || slugify(draft.title),
-      tags: draft.tags.split(',').map(t => t.trim()).filter(Boolean),
-    };
-    await fetch('/api/research', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    setDraft({ title: '', slug: '', category: 'research', excerpt: '', body: '', author: '', tags: '', readTime: 5, published: true });
-    setShowNew(false);
-    load();
-  }
+function fmtDate(d: Date | string | undefined): string {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export default async function AdminResearchPage() {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") redirect("/sign-in?next=/admin/research");
+
+  const items = await getAll();
+  const drafts = items.filter((a) => !a.published);
+  const published = items.filter((a) => a.published);
 
   return (
     <div className="space-y-8">
-      <div className="flex items-end justify-between">
+      <div className="flex items-baseline justify-between">
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-wider text-purple-700 mb-2">— Research</p>
-          <h1 className="h-display text-4xl">Articles</h1>
+          <h1 className="h-display text-[28px] tracking-tighter mb-2">
+            Research
+          </h1>
+          <p className="text-[13.5px] text-ink-2 max-w-2xl leading-relaxed">
+            Studio writing. Drafts stay private; publishing makes an article
+            visible on <span className="font-mono text-[12px]">/research</span>.
+          </p>
         </div>
-        <button onClick={() => setShowNew(!showNew)} className="btn-primary"><Plus className="w-4 h-4" /> New article</button>
+        <Link href="/admin/research/new" className="btn-primary !py-2 !text-xs">
+          <Plus className="w-3.5 h-3.5" strokeWidth={2} /> New article
+        </Link>
       </div>
 
-      {showNew && (
-        <div className="border border-rule bg-bone p-6 space-y-4">
-          <input placeholder="Title *" value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value, slug: slugify(e.target.value) })} className="w-full border-b border-rule py-2 focus:outline-none focus:border-purple-700" />
-          <div className="grid sm:grid-cols-2 gap-3">
-            <input placeholder="Slug" value={draft.slug} onChange={e => setDraft({ ...draft, slug: e.target.value })} className="border-b border-rule py-2 text-sm font-mono focus:outline-none" />
-            <select value={draft.category} onChange={e => setDraft({ ...draft, category: e.target.value })} className="border border-rule px-3 py-2 text-sm">
-              <option value="research">Research</option>
-              <option value="engineering">Engineering</option>
-              <option value="design">Design</option>
-              <option value="business">Business</option>
-            </select>
-            <input placeholder="Author" value={draft.author} onChange={e => setDraft({ ...draft, author: e.target.value })} className="border-b border-rule py-2 text-sm focus:outline-none" />
-            <input type="number" placeholder="Read time (min)" value={draft.readTime} onChange={e => setDraft({ ...draft, readTime: Number(e.target.value) })} className="border-b border-rule py-2 text-sm focus:outline-none" />
-          </div>
-          <textarea placeholder="Excerpt" value={draft.excerpt} onChange={e => setDraft({ ...draft, excerpt: e.target.value })} rows={2} className="w-full border border-rule p-3 text-sm focus:outline-none focus:border-purple-700" />
-          <textarea placeholder="Body" value={draft.body} onChange={e => setDraft({ ...draft, body: e.target.value })} rows={12} className="w-full border border-rule p-3 text-sm focus:outline-none focus:border-purple-700 font-serif" />
-          <input placeholder="Tags (comma separated)" value={draft.tags} onChange={e => setDraft({ ...draft, tags: e.target.value })} className="w-full border-b border-rule py-2 text-sm focus:outline-none" />
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.published} onChange={e => setDraft({ ...draft, published: e.target.checked })} /> Publish immediately</label>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setShowNew(false)} className="text-sm text-ink/60 hover:text-ink px-3 py-2">Cancel</button>
-            <button onClick={create} className="btn-primary !text-xs !py-2">Publish</button>
-          </div>
+      {items.length === 0 && (
+        <div className="text-center py-16 rounded-xl border border-rule bg-tint-1">
+          <p className="text-[13.5px] text-ink-3 italic mb-4">
+            No articles yet.
+          </p>
+          <Link
+            href="/admin/research/new"
+            className="btn-primary !py-2 !text-xs inline-flex"
+          >
+            <Plus className="w-3.5 h-3.5" strokeWidth={2} /> Write your first
+          </Link>
         </div>
       )}
 
-      <div className="border border-rule bg-bone divide-y divide-rule">
-        {items.length === 0 && <p className="p-6 text-ink/50 italic">No articles yet.</p>}
-        {items.map((a: any) => (
-          <div key={a._id} className="p-5 flex items-baseline justify-between">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 bg-purple-100 text-purple-800 rounded-full mb-2 inline-block">{a.category}</span>
-              <h3 className="font-display text-xl">{a.title}</h3>
-              <p className="text-xs text-ink/50 mt-1">{a.author} · {a.readTime} min · {a.publishedAt ? formatDate(a.publishedAt) : 'unpublished'}</p>
-            </div>
-            <Link href={`/research/${a.slug}`} target="_blank" className="text-xs text-purple-700 hover:underline">View →</Link>
-          </div>
-        ))}
-      </div>
+      {drafts.length > 0 && (
+        <Section
+          title="Drafts"
+          subtitle={`${drafts.length} unpublished ${drafts.length === 1 ? "item" : "items"}`}
+          items={drafts}
+        />
+      )}
+
+      {published.length > 0 && (
+        <Section
+          title="Published"
+          subtitle={`${published.length} live ${published.length === 1 ? "item" : "items"}`}
+          items={published}
+        />
+      )}
     </div>
+  );
+}
+
+function Section({
+  title,
+  subtitle,
+  items,
+}: {
+  title: string;
+  subtitle: string;
+  items: ArticleLean[];
+}) {
+  return (
+    <section>
+      <div className="flex items-baseline justify-between mb-4">
+        <div>
+          <h2 className="h-display text-[18px] tracking-tighter">{title}</h2>
+          <p className="text-[11.5px] font-mono text-ink-3 mt-0.5">
+            {subtitle}
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-rule bg-white overflow-hidden">
+        <ul className="divide-y divide-rule">
+          {items.map((item) => (
+            <li key={item._id}>
+              <Link
+                href={`/admin/research/${item._id}`}
+                className="flex items-center gap-4 px-5 py-4 hover:bg-tint-1 transition-colors group"
+              >
+                <div
+                  className="w-8 h-8 rounded-full grid place-items-center flex-shrink-0"
+                  style={{
+                    background: item.published ? "#DCFCE7" : "var(--rule)",
+                  }}
+                >
+                  {item.published ? (
+                    <Eye
+                      className="w-3.5 h-3.5"
+                      strokeWidth={2}
+                      style={{ color: "#15803D" }}
+                    />
+                  ) : (
+                    <EyeOff
+                      className="w-3.5 h-3.5 text-ink-3"
+                      strokeWidth={2}
+                    />
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {item.category && (
+                      <span
+                        className="text-[9.5px] font-mono uppercase tracking-wider"
+                        style={{ color: "var(--brand)" }}
+                      >
+                        {CATEGORY_LABELS[item.category] || item.category}
+                      </span>
+                    )}
+                    {item.author && (
+                      <>
+                        <span className="text-[9.5px] font-mono text-ink-3">
+                          ·
+                        </span>
+                        <span className="text-[10.5px] text-ink-2 truncate">
+                          {item.author}
+                        </span>
+                      </>
+                    )}
+                    {item.readTime ? (
+                      <>
+                        <span className="text-[9.5px] font-mono text-ink-3">
+                          ·
+                        </span>
+                        <span className="text-[10.5px] text-ink-3 font-mono">
+                          {item.readTime} min
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                  <p className="text-[14.5px] font-medium truncate group-hover:text-brand transition-colors">
+                    {item.title || (
+                      <span className="italic text-ink-3">Untitled</span>
+                    )}
+                  </p>
+                  {item.excerpt && (
+                    <p className="text-[12.5px] text-ink-2 truncate mt-0.5">
+                      {item.excerpt}
+                    </p>
+                  )}
+                </div>
+
+                <div className="text-right flex-shrink-0 hidden sm:block">
+                  <p className="text-[11px] font-mono text-ink-3 flex items-center gap-1 justify-end">
+                    <Calendar className="w-2.5 h-2.5" strokeWidth={2} />
+                    {fmtDate(
+                      item.published
+                        ? item.publishedAt || item.updatedAt
+                        : item.updatedAt || item.createdAt,
+                    )}
+                  </p>
+                </div>
+
+                <Edit
+                  className="w-3.5 h-3.5 text-ink-3 group-hover:text-brand transition-colors flex-shrink-0"
+                  strokeWidth={2}
+                />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }

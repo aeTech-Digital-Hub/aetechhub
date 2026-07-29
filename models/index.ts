@@ -18,6 +18,7 @@ const ResearchSchema = new Schema(
     readTime: Number,
     published: { type: Boolean, default: false },
     publishedAt: Date,
+    gallery: { type: [String], default: [] },
   },
   { timestamps: true },
 );
