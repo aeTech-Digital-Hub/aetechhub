@@ -14,6 +14,7 @@ import { FAQs } from "@/components/marketing/FAQs";
 import { FaqJsonLd } from "@/components/seo/JsonLd";
 import { FAQS } from "@/lib/faqs";
 import { HowToStart } from "@/components/marketing/HowToStart";
+import { RecentProjectsSection } from "@/components/marketing/RecentProjectsSection";
 
 export const revalidate = 3600;
 
@@ -310,7 +311,7 @@ export default async function HomePage() {
       {/* ─────────────────────────────────────────
           RECENT PROJECTS
           ───────────────────────────────────────── */}
-      <section className="container-px py-24 lg:py-32 border-b border-rule bg-tint-2">
+      {/* <section className="container-px py-24 lg:py-32 border-b border-rule bg-tint-2">
         <Reveal>
           <div className="flex items-end justify-between flex-wrap gap-6 mb-12 lg:mb-16">
             <div className="max-w-2xl">
@@ -430,7 +431,8 @@ export default async function HomePage() {
             </StaggerItem>
           ))}
         </StaggerReveal>
-      </section>
+      </section> */}
+      <RecentProjectsSection />
 
       <Testimonials />
 
