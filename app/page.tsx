@@ -15,6 +15,7 @@ import { FaqJsonLd } from "@/components/seo/JsonLd";
 import { FAQS } from "@/lib/faqs";
 import { HowToStart } from "@/components/marketing/HowToStart";
 import { RecentProjectsSection } from "@/components/marketing/RecentProjectsSection";
+import { HeroSection } from "@/components/marketing/HeroSection";
 
 export const revalidate = 3600;
 
@@ -89,7 +90,7 @@ export default async function HomePage() {
       {/* ─────────────────────────────────────────
           HERO
           ───────────────────────────────────────── */}
-      <section className="relative overflow-hidden border-b border-rule bg-base">
+      {/* <section className="relative overflow-hidden border-b border-rule bg-base">
         <HeroBackdrop />
 
         <div className="container-px relative">
@@ -150,7 +151,8 @@ export default async function HomePage() {
             background: "linear-gradient(to bottom, transparent, var(--bg))",
           }}
         />
-      </section>
+      </section> */}
+      <HeroSection />
 
       {/* ─────────────────────────────────────────
           CAPABILITY MARQUEE

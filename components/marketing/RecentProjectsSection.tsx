@@ -159,7 +159,7 @@ function ProjectCard({ project }: { project: ProjectLean }) {
 
         {project.tagline ? (
           <p
-            className="text-[13px] italic leading-relaxed line-clamp-2"
+            className="text-[13px] leading-relaxed line-clamp-2"
             style={{ color: "var(--brand)" }}
           >
             {project.tagline}
