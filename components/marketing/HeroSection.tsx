@@ -58,7 +58,7 @@ export function HeroSection() {
 
           {/* Restrained subhead — a proposition, not a feature list */}
           <p className="fade-in-3 text-[17px] lg:text-[19px] text-ink-2 max-w-xl mx-auto mb-10 leading-relaxed">
-            An Accra studio building SaaS platforms, ML systems, and secure
+            A Hub of nerds building SaaS platforms, ML systems, and secure
             infrastructure end-to-end.
           </p>
 
