@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Inbox, Clock, ArrowUpRight, FileText } from "lucide-react";
+import {
+  Inbox,
+  Clock,
+  ArrowUpRight,
+  FileText,
+  AlertTriangle,
+} from "lucide-react";
 import { dbConnect } from "@/lib/db";
 import { Brief, BriefVisit } from "@/models/Project";
 import { getCurrentUser } from "@/lib/auth-server";
@@ -12,9 +18,6 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-// ────────────────────────────────────────────
-// Status meta — colors match the BriefManager pipeline
-// ────────────────────────────────────────────
 const STATUS_META: Record<string, { label: string; color: string }> = {
   submitted: { label: "Submitted", color: "#B45309" },
   reviewing: { label: "Reviewing", color: "#2563EB" },
@@ -36,9 +39,6 @@ const PIPELINE_STATUSES = [
   "lost",
 ] as const;
 
-// ────────────────────────────────────────────
-// Types
-// ────────────────────────────────────────────
 type BriefLean = {
   _id: string;
   briefId?: string;
@@ -57,12 +57,13 @@ type BriefLean = {
   updatedAt?: Date;
 };
 
-// ────────────────────────────────────────────
-// Data fetching
-// Combines your funnel view (drafts, abandoned) with pipeline view
-// (submitted/reviewing/quoted/won/lost). One query per section keeps
-// sorting and limits explicit.
-// ────────────────────────────────────────────
+/**
+ * Fetches briefs grouped by workflow section.
+ *
+ * IMPORTANT: this uses `createdAt` as a fallback for older briefs that
+ * were created before we started stamping lastEditedAt/submittedAt.
+ * Prevents "invisible briefs" from being filtered out of the list.
+ */
 async function getData() {
   try {
     await dbConnect();
@@ -77,6 +78,7 @@ async function getData() {
       won,
       lost,
       archived,
+      orphaned,
       allCount,
       anonVisits,
       statusCounts,
@@ -87,7 +89,7 @@ async function getData() {
         .limit(50)
         .lean<BriefLean[]>(),
 
-      // Mid-pipeline: reviewing / in-discussion / quoted
+      // Mid-pipeline
       Brief.find({
         status: { $in: ["reviewing", "in-discussion", "quoted"] },
       })
@@ -95,17 +97,22 @@ async function getData() {
         .limit(50)
         .lean<BriefLean[]>(),
 
-      // Active drafts — visitor still writing (recent activity)
+      // Active drafts — recent OR (recently created but no lastEditedAt)
       Brief.find({
-        status: "draft",
-        lastEditedAt: { $gte: since48h },
+        $or: [
+          { status: "draft", lastEditedAt: { $gte: since48h } },
+          {
+            status: "draft",
+            lastEditedAt: { $exists: false },
+            createdAt: { $gte: since48h },
+          },
+        ],
       })
-        .sort({ lastEditedAt: -1 })
+        .sort({ lastEditedAt: -1, createdAt: -1 })
         .limit(50)
         .lean<BriefLean[]>(),
 
-      // Abandoned — either explicit "abandoned" OR draft stale >48h with
-      // contact info (visitor started but bailed — worth a follow-up email)
+      // Abandoned — explicit OR stale draft (with email) OR stale draft w/o lastEditedAt
       Brief.find({
         $or: [
           { status: "abandoned" },
@@ -114,45 +121,61 @@ async function getData() {
             lastEditedAt: { $lt: since48h },
             email: { $exists: true, $ne: "" },
           },
+          {
+            status: "draft",
+            lastEditedAt: { $exists: false },
+            createdAt: { $lt: since48h },
+            email: { $exists: true, $ne: "" },
+          },
         ],
       })
-        .sort({ lastEditedAt: -1 })
+        .sort({ lastEditedAt: -1, createdAt: -1 })
         .limit(50)
         .lean<BriefLean[]>(),
 
-      // Won
       Brief.find({ status: "won" })
         .sort({ updatedAt: -1 })
         .limit(20)
         .lean<BriefLean[]>(),
-
-      // Lost
       Brief.find({ status: "lost" })
         .sort({ updatedAt: -1 })
         .limit(20)
         .lean<BriefLean[]>(),
-
-      // Archived
       Brief.find({ status: "archived" })
         .sort({ updatedAt: -1 })
         .limit(20)
         .lean<BriefLean[]>(),
 
-      // All-time count
-      Brief.countDocuments(),
+      // Orphaned — status not in any known bucket. Safety net.
+      Brief.find({
+        status: {
+          $nin: [
+            "submitted",
+            "reviewing",
+            "in-discussion",
+            "quoted",
+            "won",
+            "lost",
+            "draft",
+            "abandoned",
+            "archived",
+          ],
+        },
+      })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean<BriefLean[]>(),
 
-      // Anon visits — best-effort, doesn't fail the page
+      Brief.countDocuments(),
       BriefVisit.countDocuments({
         visitedAt: { $gte: since30d },
       }).catch(() => 0),
 
-      // Status counts for pipeline pills
       Brief.aggregate([
         { $group: { _id: "$status", count: { $sum: 1 } } },
       ]).catch(() => []),
     ]);
 
-    // Reduce status counts to a map
     const counts: Record<string, number> = {};
     for (const row of statusCounts as { _id: string; count: number }[]) {
       if (row._id) counts[row._id] = row.count;
@@ -166,6 +189,7 @@ async function getData() {
       won: JSON.parse(JSON.stringify(won)) as BriefLean[],
       lost: JSON.parse(JSON.stringify(lost)) as BriefLean[],
       archived: JSON.parse(JSON.stringify(archived)) as BriefLean[],
+      orphaned: JSON.parse(JSON.stringify(orphaned)) as BriefLean[],
       allCount,
       anonVisits,
       counts,
@@ -180,6 +204,7 @@ async function getData() {
       won: [] as BriefLean[],
       lost: [] as BriefLean[],
       archived: [] as BriefLean[],
+      orphaned: [] as BriefLean[],
       allCount: 0,
       anonVisits: 0,
       counts: {} as Record<string, number>,
@@ -187,9 +212,6 @@ async function getData() {
   }
 }
 
-// ────────────────────────────────────────────
-// Formatters
-// ────────────────────────────────────────────
 function fmtDate(d: Date | string | undefined): string {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("en-GB", {
@@ -206,24 +228,30 @@ function daysSince(d: Date | string | undefined): number | null {
   );
 }
 
-// ────────────────────────────────────────────
-// PAGE
-// ────────────────────────────────────────────
 export default async function AdminBriefsPage() {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") redirect("/sign-in?next=/admin/briefs");
 
   const data = await getData();
-
   const totalActive =
     data.needsReview.length +
     data.activePipeline.length +
     data.activeDrafts.length +
     data.abandoned.length;
 
+  const displayedTotal =
+    data.needsReview.length +
+    data.activePipeline.length +
+    data.activeDrafts.length +
+    data.abandoned.length +
+    data.won.length +
+    data.lost.length +
+    data.archived.length +
+    data.orphaned.length;
+  const hidden = Math.max(0, data.allCount - displayedTotal);
+
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div>
         <h1 className="h-display text-[28px] tracking-tighter mb-2">Briefs</h1>
         <p className="text-[13.5px] text-ink-2 max-w-2xl leading-relaxed">
@@ -232,7 +260,30 @@ export default async function AdminBriefsPage() {
         </p>
       </div>
 
-      {/* ─── STAT STRIP ─── */}
+      {/* Diagnostic warning — only shows if some briefs are unaccounted for */}
+      {hidden > 0 && (
+        <div
+          className="rounded-lg border px-4 py-3 flex items-start gap-3"
+          style={{ background: "#FEF3C7", borderColor: "#FDE68A" }}
+        >
+          <AlertTriangle
+            className="w-4 h-4 flex-shrink-0 mt-0.5"
+            strokeWidth={2}
+            style={{ color: "#92400E" }}
+          />
+          <div className="text-[12.5px]" style={{ color: "#92400E" }}>
+            <p className="font-medium">
+              {hidden} brief{hidden === 1 ? "" : "s"} not shown in any section
+            </p>
+            <p className="mt-0.5">
+              These briefs have a status not matched by any bucket, or fields
+              missing. Check MongoDB Compass or run the backfill query.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Stat strip */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <Stat label="All-time" value={data.allCount} />
         <Stat
@@ -249,7 +300,7 @@ export default async function AdminBriefsPage() {
         <Stat label="Anon visits · 30d" value={data.anonVisits} />
       </div>
 
-      {/* ─── PIPELINE PILL GRID ─── */}
+      {/* Pipeline pill grid */}
       <div className="rounded-2xl border border-rule bg-white p-5">
         <div className="flex items-baseline justify-between mb-4">
           <p className="eyebrow">Pipeline</p>
@@ -284,7 +335,6 @@ export default async function AdminBriefsPage() {
         </div>
       </div>
 
-      {/* ─── EMPTY STATE ─── */}
       {data.allCount === 0 && (
         <div className="text-center py-16 rounded-xl border border-rule bg-tint-1">
           <Inbox
@@ -297,9 +347,6 @@ export default async function AdminBriefsPage() {
         </div>
       )}
 
-      {/* ─── SECTIONS ─── */}
-
-      {/* 1. Needs review — highest priority */}
       {data.needsReview.length > 0 && (
         <Section
           title="Needs review"
@@ -310,7 +357,6 @@ export default async function AdminBriefsPage() {
         />
       )}
 
-      {/* 2. Active pipeline — reviewing / in-discussion / quoted */}
       {data.activePipeline.length > 0 && (
         <Section
           title="Active pipeline"
@@ -320,7 +366,6 @@ export default async function AdminBriefsPage() {
         />
       )}
 
-      {/* 3. Active drafts — visitor still typing */}
       {data.activeDrafts.length > 0 && (
         <Section
           title="Active drafts"
@@ -331,7 +376,6 @@ export default async function AdminBriefsPage() {
         />
       )}
 
-      {/* 4. Abandoned — follow-up opportunity */}
       {data.abandoned.length > 0 && (
         <Section
           title="Abandoned · follow-up worthwhile"
@@ -343,7 +387,6 @@ export default async function AdminBriefsPage() {
         />
       )}
 
-      {/* 5. Won */}
       {data.won.length > 0 && (
         <Section
           title="Won"
@@ -352,7 +395,6 @@ export default async function AdminBriefsPage() {
         />
       )}
 
-      {/* 6. Lost */}
       {data.lost.length > 0 && (
         <Section
           title="Lost"
@@ -361,7 +403,6 @@ export default async function AdminBriefsPage() {
         />
       )}
 
-      {/* 7. Archived */}
       {data.archived.length > 0 && (
         <Section
           title="Archived"
@@ -369,13 +410,18 @@ export default async function AdminBriefsPage() {
           items={data.archived}
         />
       )}
+
+      {data.orphaned.length > 0 && (
+        <Section
+          title="Unknown status"
+          subtitle={`${data.orphaned.length} ${data.orphaned.length === 1 ? "brief" : "briefs"} with unrecognized status \u2014 investigate manually`}
+          items={data.orphaned}
+        />
+      )}
     </div>
   );
 }
 
-// ────────────────────────────────────────────
-// Local components
-// ────────────────────────────────────────────
 function Stat({
   label,
   value,
@@ -429,10 +475,7 @@ function Section({
           {urgent && (
             <span
               className="text-[9.5px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded"
-              style={{
-                background: "var(--brand)",
-                color: "white",
-              }}
+              style={{ background: "var(--brand)", color: "white" }}
             >
               Priority
             </span>
@@ -472,7 +515,7 @@ function BriefRow({
   const status = item.status || "submitted";
   const meta = STATUS_META[status] || STATUS_META.submitted;
   const dateField = useLastEditedAt
-    ? item.lastEditedAt || item.updatedAt
+    ? item.lastEditedAt || item.updatedAt || item.createdAt
     : item.submittedAt || item.createdAt;
   const days = daysSince(dateField);
   const stale = days !== null && days > 3;
@@ -483,13 +526,10 @@ function BriefRow({
         href={`/admin/briefs/${item._id}`}
         className="flex items-center gap-4 px-5 py-4 hover:bg-tint-1 transition-colors group"
       >
-        {/* Status color bar */}
         <span
           className="w-1 self-stretch rounded-full flex-shrink-0"
           style={{ background: meta.color }}
         />
-
-        {/* File icon */}
         <span
           className="w-8 h-8 rounded-full grid place-items-center flex-shrink-0"
           style={{ background: "var(--brand-100)" }}
@@ -501,7 +541,6 @@ function BriefRow({
           />
         </span>
 
-        {/* Main info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5 flex-wrap">
             <span
@@ -554,7 +593,6 @@ function BriefRow({
           ) : null}
         </div>
 
-        {/* Completion % bar */}
         {showCompletion && (
           <div className="hidden md:block flex-shrink-0 w-24">
             <div className="flex items-baseline justify-end mb-1">
@@ -574,7 +612,6 @@ function BriefRow({
           </div>
         )}
 
-        {/* Date */}
         <div className="text-right flex-shrink-0 hidden sm:block">
           <p className="text-[11px] font-mono text-ink-3 flex items-center gap-1 justify-end">
             <Clock className="w-2.5 h-2.5" strokeWidth={2} />

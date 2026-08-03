@@ -152,7 +152,7 @@ export function BriefManager({ initial }: { initial: BriefLean }) {
         return;
       }
       // Redirect straight to the new project editor
-      router.push(`/admin/projects/${json.project._id}`);
+      router.push(`/admin/brief/${json.brief._id}`);
     } catch (err: any) {
       setMsg(err?.message || "Conversion failed.");
     } finally {

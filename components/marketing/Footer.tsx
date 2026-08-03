@@ -26,15 +26,18 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="bg-ink pt-16 lg:pt-20 px-4">
-      {/* Light card — sits on top of the dark wrapper */}
+    // ─── Outer wrapper now uses brand purple (was bg-ink / black) ───
+    <footer
+      className="pt-16 lg:pt-20 px-4"
+      style={{ background: "var(--brand)" }}
+    >
+      {/* Light card — sits on top of the brand-purple wrapper */}
       <div className="max-w-[1350px] mx-auto bg-base text-ink rounded-t-3xl overflow-hidden">
         <div className="px-6 sm:px-10 md:px-16 lg:px-24 pt-12 lg:pt-16">
           {/* TOP — newsletter + columns */}
           <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 pb-12 lg:pb-16">
             {/* LEFT — brand + newsletter + socials */}
             <div className="space-y-7">
-              {/* Brand */}
               <Link href="/" className="inline-flex items-center gap-3">
                 <Image
                   src="/aetech-logo.png"
@@ -56,7 +59,6 @@ export function Footer() {
                 teams that need it done by senior engineers, end to end.
               </p>
 
-              {/* Newsletter */}
               <form onSubmit={subscribe} className="max-w-md">
                 <p className="eyebrow mb-3">Quiet, occasional dispatches</p>
                 <div className="flex items-stretch gap-0 border border-rule rounded-full overflow-hidden bg-white">
@@ -69,7 +71,7 @@ export function Footer() {
                     required
                   />
                   <button
-                    className="px-4 text-[13px] font-medium flex items-center gap-1.5 hover:text-brand transition-colors"
+                    className="px-4 text-[13px] font-medium flex items-center gap-1.5 hover:opacity-80 transition-opacity"
                     style={{ color: "var(--brand)" }}
                   >
                     {done ? "Thanks ✓" : "Subscribe"}
@@ -84,7 +86,6 @@ export function Footer() {
                 </p>
               </form>
 
-              {/* Socials */}
               <div className="flex items-center gap-5 pt-1">
                 <SocialLink href="https://twitter.com" label="Twitter">
                   <svg
@@ -146,8 +147,8 @@ export function Footer() {
               </div>
             </div>
 
-            {/* RIGHT — link columns */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 md:gap-10 items-start">
+            {/* RIGHT — link columns (Legal column added) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 md:gap-8 items-start">
               <FooterCol title="Hub">
                 <FooterLink href="/services">Services</FooterLink>
                 <FooterLink href="/projects">Work</FooterLink>
@@ -162,7 +163,13 @@ export function Footer() {
                 <FooterLink href="/announcements">Announcements</FooterLink>
               </FooterCol>
 
-              <FooterCol title="Studio details">
+              <FooterCol title="Legal">
+                <FooterLink href="/privacy">Privacy policy</FooterLink>
+                <FooterLink href="/terms">Terms of service</FooterLink>
+                <FooterLink href="/brief/guide">Brief guide</FooterLink>
+              </FooterCol>
+
+              <FooterCol title="Studio">
                 <span className="text-[13px] text-ink-2 leading-relaxed">
                   Spintex Flower Port
                   <br />
@@ -172,7 +179,7 @@ export function Footer() {
                   href="mailto:ephraim@aetechdigitalhub.com"
                   className="text-[13px] text-ink-2 hover:text-brand transition-colors break-all"
                 >
-                  info@aetechdigitalhub.com
+                  ephraim@aetechdigitalhub.com
                 </a>
                 <a
                   href="tel:+233554448061"
@@ -186,14 +193,26 @@ export function Footer() {
 
           {/* META row */}
           <div className="flex flex-wrap justify-between items-center gap-4 py-6 border-t border-rule text-[12px] text-ink-3">
-            <span>© {year} aeTech Digital Hub. All rights reserved.</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <span>© {year} aeTech Digital Hub. All rights reserved.</span>
+              <span className="hidden sm:inline opacity-40">·</span>
+              <Link
+                href="/privacy"
+                className="hover:text-ink transition-colors"
+              >
+                Privacy
+              </Link>
+              <span className="opacity-40">·</span>
+              <Link href="/terms" className="hover:text-ink transition-colors">
+                Terms
+              </Link>
+            </div>
             <span className="font-mono">…You dream, We build.</span>
           </div>
         </div>
 
         {/* BIG STROKED WORDMARK */}
         <div className="relative">
-          {/* Soft lavender glow behind the wordmark, mimics the reference's slate-100 glow */}
           <div
             aria-hidden
             className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-3xl h-full max-h-64 rounded-full pointer-events-none"

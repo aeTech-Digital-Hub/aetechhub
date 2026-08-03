@@ -22,7 +22,8 @@ import { pushToast } from "@/store/slices/uiSlice";
 
 const NAV = [
   { href: "/admin/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/admin/projects", label: "Briefs", icon: FileText },
+  { href: "/admin/briefs", label: "Briefs", icon: FileText },
+  { href: "/admin/projects", label: "Projects", icon: FileText },
   { href: "/admin/invoices", label: "Invoices", icon: Receipt },
   { href: "/admin/clients", label: "Clients", icon: Users },
   { href: "/admin/funnel", label: "Funnel", icon: TrendingUp },
@@ -69,7 +70,7 @@ export function AdminShell({
             </span>
           </Link>
           <p className="text-[11px] uppercase tracking-wider text-accent mt-1.5">
-            Studio Admin
+            Hub Admin
           </p>
         </div>
 

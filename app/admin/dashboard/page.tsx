@@ -43,7 +43,7 @@ export default async function AdminDashboard() {
     <div className="space-y-10">
       <div>
         <p className="font-mono text-[11px] uppercase tracking-wider text-purple-700 mb-2">— Overview</p>
-        <h1 className="h-display text-5xl">Studio dashboard</h1>
+        <h1 className="h-display text-5xl">Hub dashboard</h1>
       </div>
 
       {/* KPI grid */}
