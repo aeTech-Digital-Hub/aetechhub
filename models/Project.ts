@@ -121,6 +121,109 @@ const BriefVisitSchema = new Schema(
   },
   { timestamps: false },
 );
+
+
+
+// ============================================================
+// Scope — client proposal / SOW
+// ============================================================
+ 
+const DeliverableSchema = new Schema(
+  {
+    title: { type: String, required: true },
+    description: { type: String, default: "" },
+    priceUsd: { type: Number, required: true, min: 0 },
+  },
+  { _id: true },
+);
+ 
+const ScopeSchema = new Schema(
+  {
+    // Auto-generated reference like SCOPE-2026-0001
+    scopeRef: { type: String, unique: true, required: true, index: true },
+ 
+    // Optional — a Scope may originate from a Brief or be created standalone
+    briefId: { type: Schema.Types.ObjectId, ref: "Brief", index: true },
+ 
+    // Client info (denormalized from Brief at creation; editable per scope)
+    clientName: { type: String, required: true },
+    clientEmail: { type: String, required: true },
+    clientCompany: { type: String, default: "" },
+    clientPhone: { type: String, default: "" },
+ 
+    // Project positioning
+    projectTitle: { type: String, required: true },
+    projectDescription: { type: String, default: "" },
+ 
+    // Line items — the heart of the proposal
+    deliverables: { type: [DeliverableSchema], default: [] },
+ 
+    // Pricing
+    discountUsd: { type: Number, default: 0, min: 0 },
+    depositPercent: { type: Number, default: 50, min: 0, max: 100 },
+    // Note: subtotal + total + depositAmount + balance are computed at render time
+    // to avoid stale sums. We only store discount + depositPercent.
+ 
+    // Timeline
+    timelineDescription: { type: String, default: "" },
+    // Optional structured milestones — leave empty for prose-only timeline
+    milestones: {
+      type: [
+        new Schema(
+          {
+            title: String,
+            description: String,
+            dueDate: Date,
+          },
+          { _id: true },
+        ),
+      ],
+      default: [],
+    },
+ 
+    // Assumptions + exclusions
+    assumptions: { type: String, default: "" },
+    exclusions: { type: [String], default: [] },
+ 
+    // Terms
+    paymentTerms: {
+      type: String,
+      default:
+        "70% deposit before work begins, 30% on delivery. Invoices due 14 days from issue. See our Terms of Service for full commercial terms.",
+    },
+    validUntil: { type: Date },
+ 
+    // Status
+    status: {
+      type: String,
+      enum: ["draft", "sent", "viewed", "accepted", "rejected", "expired"],
+      default: "draft",
+      index: true,
+    },
+ 
+    // Public sharing (populated in Round 2)
+    publicToken: { type: String, index: true, sparse: true, unique: true },
+ 
+    // Tracking
+    viewCount: { type: Number, default: 0 },
+    firstViewedAt: Date,
+    lastViewedAt: Date,
+    sentAt: Date,
+    acceptedAt: Date,
+    rejectedAt: Date,
+    rejectedReason: String,
+ 
+    // Internal
+    notes: { type: String, default: "" },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+ 
+    // Linked project (if accepted and converted)
+    convertedToProjectId: { type: Schema.Types.ObjectId, ref: "Project" },
+  },
+  { timestamps: true },
+);
+ 
+
 // Auto-prune visits after 90 days
 BriefVisitSchema.index(
   { visitedAt: 1 },
@@ -133,9 +236,12 @@ if (process.env.NODE_ENV !== "production") {
   delete (mongoose.models as any).Brief;
   delete (mongoose.models as any).BriefVisit;
   delete (mongoose.models as any).Project;
+  delete (mongoose.models as any).Scope; 
 }
 
 export const Project = models.Project || model("Project", ProjectSchema);
 export const Brief = models.Brief || model("Brief", BriefSchema);
 export const BriefVisit =
   models.BriefVisit || model("BriefVisit", BriefVisitSchema);
+export const Scope =
+  models.Scope || model("Scope", ScopeSchema);
