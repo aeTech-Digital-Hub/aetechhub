@@ -23,6 +23,7 @@ import { pushToast } from "@/store/slices/uiSlice";
 const NAV = [
   { href: "/admin/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/briefs", label: "Briefs", icon: FileText },
+  { href: "/admin/scopes", label: "Scopes", icon: FileText },
   { href: "/admin/projects", label: "Projects", icon: FileText },
   { href: "/admin/invoices", label: "Invoices", icon: Receipt },
   { href: "/admin/clients", label: "Clients", icon: Users },
@@ -53,7 +54,7 @@ export function AdminShell({
 
   return (
     <div className="min-h-screen bg-bone flex">
-      <aside className="w-64 bg-ink text-bone flex flex-col fixed inset-y-0 left-0 z-30">
+      <aside className="w-64 bg-[#2D0D50] text-bone flex flex-col fixed inset-y-0 left-0 z-30">
         <div className="px-6 py-6 border-b border-bone/10">
           <Link href="/" className="flex items-center gap-3">
             <Image
@@ -66,7 +67,7 @@ export function AdminShell({
               style={{ height: "auto" }}
             />
             <span className="font-display text-xl text-bone">
-              ae<span className="italic font-light">Tech</span>
+              ae<span className="font-light">Tech</span>
             </span>
           </Link>
           <p className="text-[11px] uppercase tracking-wider text-accent mt-1.5">
